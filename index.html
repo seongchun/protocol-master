@@ -1005,7 +1005,7 @@ function seedDatabase(){
 function loadFromLocal(){
   try{
     var ev=localStorage.getItem('pm_events');
-    if(ev){events=JSON.parse(ev)}
+    if(ev){var _parsed=JSON.parse(ev);if(_parsed.length>0){events=_parsed}else if(typeof _sampleEvents!=='undefined'){events=JSON.parse(JSON.stringify(_sampleEvents))}}
     else if(typeof _sampleEvents!=='undefined'){events=JSON.parse(JSON.stringify(_sampleEvents))}
     var us=localStorage.getItem('pm_users');
     if(us)users=JSON.parse(us);
@@ -2273,10 +2273,16 @@ function resetUserPw(i){
   });
 }
 function promptSetPw(i){
-  var pw=prompt('\u201C'+users[i].name+'\u201D\uC758 \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694:');
-  if(!pw||!pw.trim())return;
-  if(pw.length<4){toast('\uBE44\uBC00\uBC88\uD638\uB294 4\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');return}
-  hashPwAsync(pw.trim()).then(function(h){users[i].pwHash=h;save('users');toast(users[i].name+'\uC758 \uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')});
+  var setPwHtml='<div style="display:flex;flex-direction:column;gap:14px;padding:10px 0">';
+  setPwHtml+='<div><label style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:5px;display:block">\uC0C8 \uBE44\uBC00\uBC88\uD638 (4\uC790 \uC774\uC0C1)</label><input type="password" class="inp" id="setPwNew" placeholder="\uC0C8 \uBE44\uBC00\uBC88\uD638 \uC785\uB825" style="padding:10px"></div>';
+  setPwHtml+='<div><label style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:5px;display:block">\uBE44\uBC00\uBC88\uD638 \uD655\uC778</label><input type="password" class="inp" id="setPwConfirm" placeholder="\uBE44\uBC00\uBC88\uD638 \uD655\uC778" style="padding:10px"></div>';
+  setPwHtml+='</div>';
+  dlg('\u201C'+users[i].name+'\u201D \uBE44\uBC00\uBC88\uD638 \uC124\uC815',setPwHtml,function(){
+    var newPw=Q('setPwNew').value,confirmPw=Q('setPwConfirm').value;
+    if(!newPw||newPw.trim().length<4){toast('\uBE44\uBC00\uBC88\uD638\uB294 4\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');return}
+    if(newPw!==confirmPw){toast('\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.');return}
+    hashPwAsync(newPw.trim()).then(function(h){users[i].pwHash=h;save('users');closeDlg();toast(users[i].name+'\uC758 \uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')});
+  });
 }
 function deleteUser(i){if(me&&users[i].id===me.id){toast('현재 로그인한 사용자는 삭제할 수 없습니다.');return}if(users[i].role==='admin'){toast('\uAD00\uB9AC\uC790\uB294 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.');return}dlg('\uC0AC\uC6A9\uC790 \uC0AD\uC81C','\u201C'+esc(users[i].name)+'\u201D \uC0AC\uC6A9\uC790\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',function(){users.splice(i,1);save('users');editingUser=-1;closeDlg();renderAdmin();toast('\uC0AC\uC6A9\uC790\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')})}
 function editUser(i){editingUser=(editingUser===i)?-1:i;renderAdmin()}
