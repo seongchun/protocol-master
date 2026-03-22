@@ -102,7 +102,7 @@ button{cursor:pointer;border:none;background:none}
 .tg-dh{text-align:center;padding:8px 4px;border-right:1px solid var(--g100)}
 .tg-dh:last-child{border-right:none}
 .tg-dh-day{font-size:11px;font-weight:700;color:var(--g400);text-transform:uppercase}
-.tg-dh-num{font-size:22px;font-weight:800;color:var(--g800);margin-top:2px;width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+.tg-dh-num{font-size:22px;font-weight:800;color:var(--g800);margin-top:2px;min-width:36px;height:36px;padding:0 6px;border-radius:18px;display:inline-flex;align-items:center;justify-content:center}
 .tg-dh-num.today{background:var(--blue);color:#fff}.tg-dh-num.sun{color:var(--red)}.tg-dh-num.sat{color:var(--blue)}
 .tg-body{display:grid;overflow-y:auto;flex:1;position:relative}
 .tg-time{border-right:1px solid var(--g200);padding:0 8px;font-size:11px;font-weight:600;color:var(--g400);text-align:right;display:flex;align-items:flex-start;justify-content:flex-end;transform:translateY(-7px)}
@@ -258,7 +258,7 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   .admin-tbl-wrap{display:none!important}.admin-cards{display:block!important}
   /* Time grid */
   .tg-time{font-size:10px;padding:0 4px}.tg-ev{font-size:10px;padding:2px 4px}
-  .tg-dh-num{font-size:18px;width:30px;height:30px}
+  .tg-dh-num{font-size:18px;min-width:30px;height:30px;padding:0 5px;border-radius:15px}
   /* Search */
   .search-box input{width:130px}.search-box input:focus{width:170px}
   /* Report */
@@ -394,6 +394,15 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   </div></div>
   <div id="newBody" style="max-width:800px;margin:0 auto;padding:16px 20px 40px"></div>
 </div>
+<!-- REQUEST HISTORY -->
+<div id="pgReq" class="page">
+  <div class="sub"><div class="sub-in">
+    <button style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:14px;color:var(--g600)" onclick="go('cal')">&#8592; 캘린더로</button>
+    <span style="font-size:16px;font-weight:800">요청이력</span>
+    <div style="width:80px"></div>
+  </div></div>
+  <div id="reqBody" style="max-width:800px;margin:0 auto;padding:16px 20px 40px"></div>
+</div>
 <!-- ADMIN -->
 <div id="pgAdmin" class="page">
   <div class="sub"><div class="sub-in">
@@ -467,6 +476,9 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   </div>
   <div class="bnav-item" data-page="new" onclick="go('new');updateBnav(this)">
     <span class="bnav-icon">➕</span><span>새 일정</span>
+  </div>
+  <div class="bnav-item" data-page="req" onclick="go('req');updateBnav(this)">
+    <span class="bnav-icon">📋</span><span>요청이력</span>
   </div>
   <div class="bnav-item" onclick="openSettings()">
     <span class="bnav-icon">⚙️</span><span>설정</span>
@@ -769,6 +781,7 @@ var contacts=[
 var nextCId=11;
 
 var events=[];
+var reqHistory=[];var reqNextId=1;var reqFilterStatus='all';
 var _sampleEvents=[
   {id:1,module:'vip_visit',title:'\uD604\uB300\uCC28\uADF8\uB8F9 \uBD80\uD68C\uC7A5 \uBC29\uBB38',startDate:'2026-03-23',endDate:'2026-03-23',startTime:'09:00',endTime:'17:00',visitorCount:8,visitorInfo:'\uD604\uB300\uCC28\uADF8\uB8F9 \uAE40\u25CB\u25CB \uBD80\uD68C\uC7A5 \uC678 7\uBA85',route:'\uC815\uBB38\u2192\uBCF8\uAD00VIP\uB77C\uC6B4\uC9C0\u2192\uC81C1\uACE0\uB85C\u2192\uC5F4\uC5F0\uACF5\uC7A5\u2192\uC815\uBB38',gift:'\uAD11\uC591 \uB3C4\uC790\uAE30 \uC138\uD2B8 8\uAC1C',support:'\uC758\uC804\uCC28\uB7C9 3\uB300, \uD1B5\uC5ED 1\uBA85',memo:'\uC0AC\uC9C4\uCD2C\uC601 \uBD88\uAC00\uAD6C\uC5ED \uC0AC\uC804\uC548\uB0B4 \uD544\uC694',createdBy:'\uBC15\uC9C0\uC601',createdAt:'2026-03-18 10:00',
     timeline:[
@@ -1253,9 +1266,13 @@ function doLogin(){
   if(u.status==='disabled'){er.textContent='\uBE44\uD65C\uC131\uD654\uB41C \uACC4\uC815\uC785\uB2C8\uB2E4.';er.style.display='block';return}
   // Password verification
   hashPwAsync(pw).then(function(hashed){
-    if(u.pwHash&&u.pwHash!==hashed){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
-    // If no password set yet (migration), set it now
-    if(!u.pwHash){u.pwHash=hashed;save('users')}
+    if(!u.pwHash){
+      hashPwAsync('1234').then(function(defHash){
+        if(hashed!==defHash){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
+        u.pwHash=defHash;save('users');_completeLogin(u);
+      });return;
+    }
+    if(u.pwHash!==hashed){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
     _completeLogin(u);
   });
 }
@@ -1311,11 +1328,12 @@ function changePw(){
 // NAV
 // ═══════════════════════════════════════
 function go(p){var bi=document.querySelector('.bnav-item[data-page="'+p+'"]');if(bi)updateBnav(bi);
-  ['pgCal','pgDetail','pgNew','pgAdmin'].forEach(function(id){Q(id).classList.remove('active')});
+  ['pgCal','pgDetail','pgNew','pgAdmin','pgReq'].forEach(function(id){Q(id).classList.remove('active')});
   if(p==='cal'){Q('pgCal').classList.add('active');renderCal();renderToday()}
   if(p==='detail'){Q('pgDetail').classList.add('active');renderDetail()}
   if(p==='new'){Q('pgNew').classList.add('active');renderNew()}
   if(p==='admin'){Q('pgAdmin').classList.add('active');renderAdmin()}
+if(p==='req'){Q('pgReq').classList.add('active');renderReqHistory()}
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1403,16 +1421,53 @@ function renderWeek(){
   var ws=weekStart(selDate||td()),tdy=td(),dates=[],hours=[];
   for(var i=0;i<7;i++){var d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i);dates.push(fmt(d.getFullYear(),d.getMonth(),d.getDate()))}
   for(var h=START_HOUR;h<=END_HOUR;h++)hours.push(h);
+  // Collect multi-day events for this week
+  var wkSpans=[],wkSeen={};
+  dates.forEach(function(ds,idx){evOn(ds).forEach(function(ev){
+    if(ev.endDate&&ev.endDate!==ev.startDate&&!wkSeen[ev.id]){wkSeen[ev.id]=true;
+      var si=0,ei=6;
+      for(var j=0;j<7;j++){if(dates[j]<=ev.startDate&&(j===6||dates[j+1]>ev.startDate))si=j;if(dates[j]<=ev.endDate)ei=j}
+      if(ev.startDate<dates[0])si=0;if(ev.endDate>dates[6])ei=6;
+      if(ev.startDate>=dates[0])for(var j=0;j<7;j++){if(dates[j]===ev.startDate){si=j;break}}
+      if(ev.endDate<=dates[6])for(var j=0;j<7;j++){if(dates[j]===ev.endDate){ei=j;break}}
+      wkSpans.push({ev:ev,si:si,ei:ei})}})});
+  // Assign lanes
+  wkSpans.sort(function(a,b){return a.si-b.si||(b.ei-b.si)-(a.ei-a.si)});
+  var wkUsed=[];
+  wkSpans.forEach(function(sp){var lane=0;
+    while(true){var ok=true;for(var u=0;u<wkUsed.length;u++){if(wkUsed[u].lane===lane&&!(sp.si>wkUsed[u].ei||sp.ei<wkUsed[u].si)){ok=false;break}}if(ok)break;lane++}
+    sp.lane=lane;wkUsed.push(sp)});
+  var wkMaxLane=0;wkSpans.forEach(function(sp){if(sp.lane>=wkMaxLane)wkMaxLane=sp.lane+1});
   var html='<div class="tg-wrap"><div class="tg-header" style="grid-template-columns:60px repeat(7,1fr)"><div class="tg-corner">GMT+9</div>';
   dates.forEach(function(ds){var d=new Date(ds+'T00:00:00'),dow=d.getDay();html+='<div class="tg-dh"><div class="tg-dh-day'+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+DY[dow]+'</div><div class="tg-dh-num'+(ds===tdy?' today':'')+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+d.getDate()+'</div></div>'});
-  html+='</div><div class="tg-body" style="grid-template-columns:60px repeat(7,1fr)">';
+  html+='</div>';
+  // Multi-day bar area
+  if(wkMaxLane>0){
+    var WLANE=22;
+    html+='<div style="display:grid;grid-template-columns:60px repeat(7,1fr);border-bottom:1px solid var(--g200);background:var(--g50)">';
+    html+='<div style="border-right:1px solid var(--g200);padding:2px 4px;font-size:10px;color:var(--g400);display:flex;align-items:center;justify-content:center">종일</div>';
+    // Build lane grid per column
+    for(var col=0;col<7;col++){
+      html+='<div style="border-right:'+(col<6?'1px solid var(--g100)':'none')+';padding:2px 0;min-height:'+(wkMaxLane*WLANE+4)+'px;position:relative">';
+      for(var lane=0;lane<wkMaxLane;lane++){var found=null;
+        for(var s=0;s<wkSpans.length;s++){if(wkSpans[s].lane===lane&&wkSpans[s].si<=col&&wkSpans[s].ei>=col){found=wkSpans[s];break}}
+        if(found){var m=MOD[found.ev.module],isS=col===found.si,isE=col===found.ei;
+          var mL=isS?'2px':'-1px',mR=isE?'2px':'-1px';
+          var rad=(isS?'4px':'0')+' '+(isE?'4px':'0')+' '+(isE?'4px':'0')+' '+(isS?'4px':'0');
+          var bL=isS?'3px solid '+m.d:'none';
+          var pL=isS?'6px':'2px';
+          var lbl=isS?esc(found.ev.title):'';
+          html+='<div style="height:'+(WLANE-4)+'px;margin:2px '+mR+' 0 '+mL+';background:'+m.c+';color:#fff;border-radius:'+rad+';border-left:'+bL+';padding:0 4px 0 '+pL+';display:flex;align-items:center;font-size:11px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer">'+(lbl?'<span class="truncate">'+lbl+'</span>':'')+'</div>'}
+        else{html+='<div style="height:'+WLANE+'px"></div>'}}
+      html+='</div>'}
+    html+='</div>'}
+  html+='<div class="tg-body" style="grid-template-columns:60px repeat(7,1fr)">';
   hours.forEach(function(h){html+='<div class="tg-time" style="height:'+SLOT_H+'px">'+String(h).padStart(2,'0')+':00</div>';dates.forEach(function(ds){html+='<div class="tg-slot" data-d="'+ds+'" data-h="'+h+'" style="height:'+SLOT_H+'px"></div>'})});
   html+='</div></div>';Q('calBody').innerHTML=html;
   dates.forEach(function(ds){var devts=evOn(ds).filter(function(ev){return ev.startTime});layoutOverlap(devts);devts.forEach(function(ev){var sMin=timeToMinutes(ev.startTime),eMin=ev.endTime?timeToMinutes(ev.endTime):sMin+60,base=START_HOUR*60,top=(sMin-base)/60*SLOT_H,h=Math.max((eMin-sMin)/60*SLOT_H,20);if(top<0){h+=top;top=0}var m=MOD[ev.module],colW=ev._maxCols>1?(100/ev._maxCols):100,colL=ev._col?(ev._col*colW):0,el=document.createElement('div');el.className='tg-ev';el.style.cssText='top:'+top+'px;height:'+h+'px;background:'+m.l+';color:'+m.d+';border-color:'+m.c+';left:'+colL+'%;width:calc('+colW+'% - 4px)';el.innerHTML='<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ev.title)+'</div><div style="opacity:.7;font-size:10px">'+ev.startTime+(ev.endTime?'~'+ev.endTime:'')+'</div>';el.onclick=function(e){e.stopPropagation();curEv=ev;editing=false;go('detail')};var slot=Q('calBody').querySelector('.tg-slot[data-d="'+ds+'"][data-h="'+START_HOUR+'"]');if(slot)slot.appendChild(el)})});
   drawNowLine(dates,'week');dimPastSlots();
   Q('calBody').querySelectorAll('.tg-slot').forEach(function(s){s.onclick=function(){selDate=this.dataset.d;openPanel(selDate)}});
 }
-
 function renderDay(){
   var ds=selDate||td(),tdy=td(),hours=[];for(var h=START_HOUR;h<=END_HOUR;h++)hours.push(h);
   var d=new Date(ds+'T00:00:00'),dow=d.getDay();
@@ -3426,6 +3481,68 @@ if('serviceWorker' in navigator){
       setInterval(function(){reg.update()},1800000);
     }).catch(function(e){console.warn('SW registration failed:',e)});
   });
+}
+function initReqHistory(){
+  var stored=null;try{stored=JSON.parse(localStorage.getItem('pm_reqHistory'))}catch(e){}
+  if(stored&&stored.length){reqHistory=stored;reqNextId=Math.max.apply(null,reqHistory.map(function(r){return r.id}))+1}
+  else{
+    reqHistory=[
+      {id:1,date:'2026-03-22',title:'월간 캘린더 다일 일정 연속바 표시',desc:'며칠씩 이어지는 일정이 캘린더에서 끊어져 보이는 문제 → 구글캘린더처럼 연속 바로 표시',status:'done'},
+      {id:2,date:'2026-03-22',title:'주간 뷰 다일 일정 연속바 표시',desc:'주간 뷰에서도 다일 일정이 이어지도록 상단 바 영역 추가',status:'done'},
+      {id:3,date:'2026-03-22',title:'로그인 비밀번호 검증 수정',desc:'아무 비밀번호로도 로그인되는 버그 수정 → 정확한 비밀번호 확인 로직 적용',status:'done'},
+      {id:4,date:'2026-03-22',title:'날짜 원(circle) 텍스트 오버플로 개선',desc:'22일 등 두 자리 숫자가 파란 원을 벗어나는 문제 → 원 크기 자동 확장',status:'done'},
+      {id:5,date:'2026-03-22',title:'요청이력 탭 추가',desc:'요청사항 기록 및 상태 필터(전체/대기/진행중/완료) 콤보 추가',status:'done'}
+    ];reqNextId=6;saveReqHistory();
+  }
+}
+function saveReqHistory(){try{localStorage.setItem('pm_reqHistory',JSON.stringify(reqHistory))}catch(e){}}
+function addReqItem(title,desc,status){
+  reqHistory.push({id:reqNextId++,date:td(),title:title,desc:desc||'',status:status||'pending'});
+  saveReqHistory();
+}
+function updateReqStatus(id,status){
+  var item=reqHistory.find(function(r){return r.id===id});
+  if(item){item.status=status;saveReqHistory()}
+}
+function renderReqHistory(){
+  initReqHistory();
+  var statuses=[{k:'all',l:'전체',c:'var(--g600)',bg:'var(--g100)'},{k:'pending',l:'대기',c:'#D97706',bg:'#FFFBEB'},{k:'doing',l:'진행중',c:'#2563EB',bg:'#EFF6FF'},{k:'done',l:'완료',c:'#059669',bg:'#ECFDF5'}];
+  var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  statuses.forEach(function(s){
+    var isActive=reqFilterStatus===s.k;
+    h+='<button onclick="reqFilterStatus=\''+s.k+'\';renderReqHistory()" style="padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;border:1.5px solid '+(isActive?s.c:'var(--g200)')+';background:'+(isActive?s.bg:'transparent')+';color:'+(isActive?s.c:'var(--g400)')+';cursor:pointer;transition:all .15s">'+s.l;
+    var cnt=s.k==='all'?reqHistory.length:reqHistory.filter(function(r){return r.status===s.k}).length;
+    h+=' <span style="font-size:11px;opacity:.7">'+cnt+'</span></button>'
+  });
+  h+='</div></div>';
+  var filtered=reqFilterStatus==='all'?reqHistory:reqHistory.filter(function(r){return r.status===reqFilterStatus});
+  filtered=filtered.slice().reverse();
+  if(!filtered.length){h+='<div style="text-align:center;padding:40px;color:var(--g400)">해당 상태의 요청이 없습니다.</div>'}
+  else{h+='<div style="display:flex;flex-direction:column;gap:8px">';
+    filtered.forEach(function(r){
+      var sc=r.status==='done'?'#059669':r.status==='doing'?'#2563EB':'#D97706';
+      var sl=r.status==='done'?'완료':r.status==='doing'?'진행중':'대기';
+      var sbg=r.status==='done'?'#ECFDF5':r.status==='doing'?'#EFF6FF':'#FFFBEB';
+      h+='<div style="background:var(--g0);border:1px solid var(--g200);border-radius:var(--r);padding:14px 16px;transition:all .12s">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">';
+      h+='<span style="font-weight:700;font-size:15px;flex:1;min-width:0" class="truncate">'+esc(r.title)+'</span>';
+      h+='<span style="font-size:11px;font-weight:700;color:'+sc+';background:'+sbg+';padding:3px 10px;border-radius:12px;white-space:nowrap">'+sl+'</span>';
+      h+='</div>';
+      if(r.desc)h+='<p style="font-size:13px;color:var(--g500);margin-bottom:6px;line-height:1.5">'+esc(r.desc)+'</p>';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between">';
+      h+='<span style="font-size:11px;color:var(--g400)">'+r.date+'</span>';
+      if(me&&me.role==='admin'){
+        h+='<div style="display:flex;gap:4px">';
+        if(r.status!=='done')h+='<button onclick="updateReqStatus('+r.id+',\'done\');renderReqHistory()" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #059669;color:#059669;background:transparent;cursor:pointer;font-weight:600">완료</button>';
+        if(r.status!=='doing'&&r.status!=='done')h+='<button onclick="updateReqStatus('+r.id+',\'doing\');renderReqHistory()" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #2563EB;color:#2563EB;background:transparent;cursor:pointer;font-weight:600">진행</button>';
+        if(r.status==='done')h+='<button onclick="updateReqStatus('+r.id+',\'pending\');renderReqHistory()" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--g300);color:var(--g400);background:transparent;cursor:pointer;font-weight:600">되돌리기</button>';
+        h+='</div>'
+      }
+      h+='</div></div>'
+    });
+    h+='</div>'}
+  Q('reqBody').innerHTML=h;
 }
 </script>
 </body>
