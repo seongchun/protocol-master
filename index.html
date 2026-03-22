@@ -281,6 +281,24 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   .toast{top:auto;bottom:80px}
   /* Settings */
   .settings-box{max-width:100%;margin:0;border-radius:16px 16px 0 0;max-height:92vh;padding:20px}
+  /* Mobile touch targets */
+  .cal-nav-btn{width:44px;height:44px}
+  .panel-close{width:44px;height:44px}
+  input[type="color"]{width:40px;height:40px}
+  /* Korean text overflow */
+  .tg-ev{word-break:break-word}
+  .truncate{word-break:break-all}
+  /* Dropdown scroll */
+  .dd{max-height:60vh;overflow-y:auto}
+  /* Notification edit stacking */
+  .noti-row>div{flex-wrap:wrap!important}
+  .noti-row input,.noti-row select{min-width:0!important}
+  /* Timeline compact */
+  .tl{padding-left:22px}.tl-dot{left:-15px}
+  .tl-place,.tl-meta{word-break:break-word;overflow-wrap:break-word}
+  /* iOS input zoom prevention */
+  input,select,textarea{font-size:16px!important}
+  .filter-pill{font-size:12px;padding:5px 12px;min-height:32px}
 }
 @media(max-width:480px){
   .cal-cell{min-height:52px}
@@ -289,8 +307,33 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   .view-tabs{width:100%}.view-tab{flex:1;text-align:center}
   .hdr-in{padding:6px 10px;height:46px}
   .logo-i{width:28px;height:28px;font-size:11px;border-radius:8px}
-  .search-box input{width:100px;font-size:12px}.search-box input:focus{width:150px}
+  .search-box input{width:80px;font-size:14px!important}.search-box input:focus{width:120px}
   .btn-p.btn-s span.hide-m{display:none}
+  /* Modal/dialog compact */
+  .dlg-box{padding:16px;max-width:92vw}
+  .send-box{padding:16px}
+  .rpt-box{padding:8px}
+  /* Settings compact */
+  .settings-box{padding:16px}
+  /* Contact picker compact */
+  .cpick input{min-width:50px}
+  /* Notification edit full-width stacking */
+  .noti-row{flex-direction:column!important;align-items:stretch!important}
+  .noti-row input,.noti-row select{width:100%!important;box-sizing:border-box}
+  /* Time grid compact */
+  .tg-dh-day{font-size:10px}.tg-dh-num{font-size:16px;min-width:28px;height:28px;padding:0 4px;border-radius:14px}
+  .tg-time{font-size:9px;padding:0 2px}.tg-ev{font-size:9px;padding:1px 3px;line-height:1.2}
+  /* Admin cards grid */
+  .admin-cards .perm-grid{grid-template-columns:1fr!important}
+  /* Calendar control compact */
+  .cal-title{font-size:16px;min-width:100px}
+  .cal-nav-btn{width:36px;height:36px;font-size:14px}
+  /* Sub header compact */
+  .sub{padding:4px 8px}
+  /* Report toolbar compact */
+  #rptToolbar .btn-xs{padding:4px 8px;font-size:11px}
+  /* Memo panel full width */
+  #memoPanel{width:100vw!important;left:0!important;right:0!important;max-width:100%!important}
 }
 /* PWA standalone mode */
 @media(display-mode:standalone){
@@ -399,9 +442,9 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
   <div class="sub"><div class="sub-in">
     <button style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:14px;color:var(--g600)" onclick="go('cal')">&#8592; 캘린더로</button>
     <span style="font-size:16px;font-weight:800">요청이력</span>
-    <div style="width:80px"></div>
+    <div style="min-width:40px;flex:1"></div>
   </div></div>
-  <div id="reqBody" style="max-width:800px;margin:0 auto;padding:16px 20px 40px"></div>
+  <div id="reqBody" style="max-width:800px;margin:0 auto;padding:16px 12px 40px"></div>
 </div>
 <!-- ADMIN -->
 <div id="pgAdmin" class="page">
@@ -1421,50 +1464,57 @@ function renderWeek(){
   var ws=weekStart(selDate||td()),tdy=td(),dates=[],hours=[];
   for(var i=0;i<7;i++){var d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i);dates.push(fmt(d.getFullYear(),d.getMonth(),d.getDate()))}
   for(var h=START_HOUR;h<=END_HOUR;h++)hours.push(h);
-  // Collect multi-day events for this week
-  var wkSpans=[],wkSeen={};
-  dates.forEach(function(ds,idx){evOn(ds).forEach(function(ev){
+  // Collect multi-day events — split all-day vs timed
+  var wkAllDay=[],wkTimed=[],wkSeen={};
+  dates.forEach(function(ds){evOn(ds).forEach(function(ev){
     if(ev.endDate&&ev.endDate!==ev.startDate&&!wkSeen[ev.id]){wkSeen[ev.id]=true;
       var si=0,ei=6;
       for(var j=0;j<7;j++){if(dates[j]<=ev.startDate&&(j===6||dates[j+1]>ev.startDate))si=j;if(dates[j]<=ev.endDate)ei=j}
       if(ev.startDate<dates[0])si=0;if(ev.endDate>dates[6])ei=6;
       if(ev.startDate>=dates[0])for(var j=0;j<7;j++){if(dates[j]===ev.startDate){si=j;break}}
       if(ev.endDate<=dates[6])for(var j=0;j<7;j++){if(dates[j]===ev.endDate){ei=j;break}}
-      wkSpans.push({ev:ev,si:si,ei:ei})}})});
-  // Assign lanes
-  wkSpans.sort(function(a,b){return a.si-b.si||(b.ei-b.si)-(a.ei-a.si)});
-  var wkUsed=[];
-  wkSpans.forEach(function(sp){var lane=0;
-    while(true){var ok=true;for(var u=0;u<wkUsed.length;u++){if(wkUsed[u].lane===lane&&!(sp.si>wkUsed[u].ei||sp.ei<wkUsed[u].si)){ok=false;break}}if(ok)break;lane++}
-    sp.lane=lane;wkUsed.push(sp)});
-  var wkMaxLane=0;wkSpans.forEach(function(sp){if(sp.lane>=wkMaxLane)wkMaxLane=sp.lane+1});
+      var span={ev:ev,si:si,ei:ei};
+      if(ev.startTime)wkTimed.push(span);else wkAllDay.push(span)}})});
+  // Lane assignment helper
+  function asnLanes(spans){
+    spans.sort(function(a,b){return a.si-b.si||(b.ei-b.si)-(a.ei-a.si)});
+    var used=[];
+    spans.forEach(function(sp){var lane=0;
+      while(true){var ok=true;for(var u=0;u<used.length;u++){if(used[u].lane===lane&&!(sp.si>used[u].ei||sp.ei<used[u].si)){ok=false;break}}if(ok)break;lane++}
+      sp.lane=lane;used.push(sp)});
+    var mx=0;spans.forEach(function(sp){if(sp.lane>=mx)mx=sp.lane+1});return mx}
+  var adMax=asnLanes(wkAllDay),tmMax=asnLanes(wkTimed);
+  // Header
   var html='<div class="tg-wrap"><div class="tg-header" style="grid-template-columns:60px repeat(7,1fr)"><div class="tg-corner">GMT+9</div>';
-  dates.forEach(function(ds){var d=new Date(ds+'T00:00:00'),dow=d.getDay();html+='<div class="tg-dh"><div class="tg-dh-day'+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+DY[dow]+'</div><div class="tg-dh-num'+(ds===tdy?' today':'')+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+d.getDate()+'</div></div>'});
+  dates.forEach(function(ds){var d=new Date(ds+'T00:00:00'),dow=d.getDay();html+='<div class="tg-dh"><div class="tg-dh-day'+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+(DY[dow])+'</div><div class="tg-dh-num'+(ds===tdy?' today':'')+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+(d.getDate())+'</div></div>'});
   html+='</div>';
-  // Multi-day bar area
-  if(wkMaxLane>0){
-    var WLANE=22;
+  // Spanning bar renderer (shared for all-day and timed rows)
+  function spanBars(spans,mx,lbl){if(mx<=0)return;var WL=22;
     html+='<div style="display:grid;grid-template-columns:60px repeat(7,1fr);border-bottom:1px solid var(--g200);background:var(--g50)">';
-    html+='<div style="border-right:1px solid var(--g200);padding:2px 4px;font-size:10px;color:var(--g400);display:flex;align-items:center;justify-content:center">종일</div>';
-    // Build lane grid per column
+    html+='<div style="border-right:1px solid var(--g200);padding:2px 4px;font-size:10px;color:var(--g400);display:flex;align-items:center;justify-content:center">'+lbl+'</div>';
     for(var col=0;col<7;col++){
-      html+='<div style="border-right:'+(col<6?'1px solid var(--g100)':'none')+';padding:2px 0;min-height:'+(wkMaxLane*WLANE+4)+'px;position:relative">';
-      for(var lane=0;lane<wkMaxLane;lane++){var found=null;
-        for(var s=0;s<wkSpans.length;s++){if(wkSpans[s].lane===lane&&wkSpans[s].si<=col&&wkSpans[s].ei>=col){found=wkSpans[s];break}}
+      html+='<div style="border-right:'+(col<6?'1px solid var(--g100)':'none')+';padding:2px 0;min-height:'+(mx*WL+4)+'px;position:relative">';
+      for(var lane=0;lane<mx;lane++){var found=null;
+        for(var s=0;s<spans.length;s++){if(spans[s].lane===lane&&spans[s].si<=col&&spans[s].ei>=col){found=spans[s];break}}
         if(found){var m=MOD[found.ev.module],isS=col===found.si,isE=col===found.ei;
           var mL=isS?'2px':'-1px',mR=isE?'2px':'-1px';
           var rad=(isS?'4px':'0')+' '+(isE?'4px':'0')+' '+(isE?'4px':'0')+' '+(isS?'4px':'0');
-          var bL=isS?'3px solid '+m.d:'none';
-          var pL=isS?'6px':'2px';
-          var lbl=isS?esc(found.ev.title):'';
-          html+='<div style="height:'+(WLANE-4)+'px;margin:2px '+mR+' 0 '+mL+';background:'+m.c+';color:#fff;border-radius:'+rad+';border-left:'+bL+';padding:0 4px 0 '+pL+';display:flex;align-items:center;font-size:11px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer">'+(lbl?'<span class="truncate">'+lbl+'</span>':'')+'</div>'}
-        else{html+='<div style="height:'+WLANE+'px"></div>'}}
+          var bL=isS?'3px solid '+m.d:'none';var pL=isS?'6px':'2px';
+          var t='';if(isS){t=esc(found.ev.title);if(found.ev.startTime)t+=' <span style="opacity:.8;font-size:10px">'+found.ev.startTime+(found.ev.endTime?'~'+found.ev.endTime:'')+'</span>'}
+          html+='<div data-evid="'+found.ev.id+'" style="height:'+(WL-4)+'px;margin:2px '+mR+' 0 '+mL+';background:'+m.c+';color:#fff;border-radius:'+rad+';border-left:'+bL+';padding:0 4px 0 '+pL+';display:flex;align-items:center;font-size:11px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer">'+(t?'<span class="truncate">'+t+'</span>':'')+'</div>'}
+        else{html+='<div style="height:'+WL+'px"></div>'}}
       html+='</div>'}
     html+='</div>'}
+  spanBars(wkAllDay,adMax,'종일');
+  spanBars(wkTimed,tmMax,'연속');
+  // Time grid
   html+='<div class="tg-body" style="grid-template-columns:60px repeat(7,1fr)">';
   hours.forEach(function(h){html+='<div class="tg-time" style="height:'+SLOT_H+'px">'+String(h).padStart(2,'0')+':00</div>';dates.forEach(function(ds){html+='<div class="tg-slot" data-d="'+ds+'" data-h="'+h+'" style="height:'+SLOT_H+'px"></div>'})});
   html+='</div></div>';Q('calBody').innerHTML=html;
-  dates.forEach(function(ds){var devts=evOn(ds).filter(function(ev){return ev.startTime});layoutOverlap(devts);devts.forEach(function(ev){var sMin=timeToMinutes(ev.startTime),eMin=ev.endTime?timeToMinutes(ev.endTime):sMin+60,base=START_HOUR*60,top=(sMin-base)/60*SLOT_H,h=Math.max((eMin-sMin)/60*SLOT_H,20);if(top<0){h+=top;top=0}var m=MOD[ev.module],colW=ev._maxCols>1?(100/ev._maxCols):100,colL=ev._col?(ev._col*colW):0,el=document.createElement('div');el.className='tg-ev';el.style.cssText='top:'+top+'px;height:'+h+'px;background:'+m.l+';color:'+m.d+';border-color:'+m.c+';left:'+colL+'%;width:calc('+colW+'% - 4px)';el.innerHTML='<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ev.title)+'</div><div style="opacity:.7;font-size:10px">'+ev.startTime+(ev.endTime?'~'+ev.endTime:'')+'</div>';el.onclick=function(e){e.stopPropagation();curEv=ev;editing=false;go('detail')};var slot=Q('calBody').querySelector('.tg-slot[data-d="'+ds+'"][data-h="'+START_HOUR+'"]');if(slot)slot.appendChild(el)})});
+  // Single-day timed events only in time grid
+  dates.forEach(function(ds){var devts=evOn(ds).filter(function(ev){return ev.startTime&&!(ev.endDate&&ev.endDate!==ev.startDate)});layoutOverlap(devts);devts.forEach(function(ev){var sMin=timeToMinutes(ev.startTime),eMin=ev.endTime?timeToMinutes(ev.endTime):sMin+60,base=START_HOUR*60,top=(sMin-base)/60*SLOT_H,h=Math.max((eMin-sMin)/60*SLOT_H,20);if(top<0){h+=top;top=0}var m=MOD[ev.module],colW=ev._maxCols>1?(100/ev._maxCols):100,colL=ev._col?(ev._col*colW):0,el=document.createElement('div');el.className='tg-ev';el.style.cssText='top:'+top+'px;height:'+h+'px;background:'+m.l+';color:'+m.d+';border-color:'+m.c+';left:'+colL+'%;width:calc('+colW+'% - 4px)';el.innerHTML='<div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ev.title)+'</div><div style="opacity:.7;font-size:10px">'+ev.startTime+(ev.endTime?'~'+ev.endTime:'')+'</div>';el.onclick=function(e){e.stopPropagation();curEv=ev;editing=false;go('detail')};var slot=Q('calBody').querySelector('.tg-slot[data-d="'+ds+'"][data-h="'+START_HOUR+'"]');if(slot)slot.appendChild(el)})});
+  // Click handlers for spanning bars
+  Q('calBody').querySelectorAll('[data-evid]').forEach(function(el){el.onclick=function(){var eid=+this.getAttribute('data-evid');curEv=events.find(function(e){return e.id===eid});if(curEv){editing=false;go('detail')}}});
   drawNowLine(dates,'week');dimPastSlots();
   Q('calBody').querySelectorAll('.tg-slot').forEach(function(s){s.onclick=function(){selDate=this.dataset.d;openPanel(selDate)}});
 }
