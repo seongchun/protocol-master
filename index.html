@@ -2127,6 +2127,8 @@ function renderAdmSend(){
       h+='<div style="display:flex;flex-direction:column;gap:8px">';
       h+='<input class="inp" id="setEmailWebhook" value="'+esc(appSettings.emailWebhook)+'" placeholder="Webhook URL" style="padding:8px">';
       h+='<input class="inp" id="setEmailApiKey" value="'+esc(appSettings.emailApiKey)+'" placeholder="API Key (선택)" style="padding:8px">';
+      h+='<input class="inp" id="setSmtpFrom" value="'+esc(appSettings.corpSenderName||'')+'" placeholder="발신 이메일 (예: protocol@posco.com)" style="padding:8px">';
+      h+='<button class="btn btn-p btn-s" onclick="testWebhookEmail()" style="align-self:flex-start">🧪 테스트 발송</button>';
       h+='</div>';
     }
     h+='</div>';
@@ -2140,6 +2142,8 @@ function renderAdmSend(){
       h+='<div style="display:flex;flex-direction:column;gap:8px">';
       h+='<input class="inp" id="setSmsWebhook" value="'+esc(appSettings.smsWebhook)+'" placeholder="SMS Webhook URL" style="padding:8px">';
       h+='<input class="inp" id="setSmsApiKey" value="'+esc(appSettings.smsApiKey)+'" placeholder="SMS API Key (선택)" style="padding:8px">';
+      h+='<input class="inp" id="setSmsFrom" value="'+esc(appSettings.smsFrom||'')+'" placeholder="발신 번호 (예: 061-xxx-xxxx)" style="padding:8px">';
+      h+='<button class="btn btn-p btn-s" onclick="testWebhookSms()" style="align-self:flex-start">🧪 테스트 발송</button>';
       h+='</div>';
     }
     h+='</div>';
