@@ -1,0 +1,17 @@
+{
+  "name": "의전 마스터 — 광양제철소",
+  "short_name": "의전마스터",
+  "description": "VIP 방문, 식사, 숙박, 골프 의전 일정 관리",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563EB",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563EB'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>📋</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
