@@ -1269,19 +1269,24 @@ function _completeLogin(u){
 function logout(){me=null;Q('pgLogin').style.display='';Q('app').style.display='none';Q('liId').value='';Q('liPw').value='';Q('liErr').style.display='none';Q('btnAdmin').style.display='none'}
 function changePw(){
   Q('dd').classList.remove('show');
-  var curPw=prompt('\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694:');
-  if(!curPw)return;
-  hashPwAsync(curPw).then(function(h){
-    if(me.pwHash&&me.pwHash!==h){toast('\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.');return}
-    var newPw=prompt('\uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694 (4\uC790 \uC774\uC0C1):');
-    if(!newPw||newPw.trim().length<4){toast('\uBE44\uBC00\uBC88\uD638\uB294 4\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');return}
-    var confirmPw=prompt('\uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uD55C\uBC88 \uB354 \uC785\uB825\uD558\uC138\uC694:');
-    if(newPw!==confirmPw){toast('\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.');return}
-    hashPwAsync(newPw.trim()).then(function(nh){
-      me.pwHash=nh;
-      var u=users.find(function(x){return x.id===me.id});
-      if(u)u.pwHash=nh;
-      save('users');toast('\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.');
+  var pwHtml='<div style="display:flex;flex-direction:column;gap:14px;padding:10px 0">';
+  pwHtml+='<div><label style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:5px;display:block">현재 비밀번호</label><input type="password" class="inp" id="cpCur" placeholder="현재 비밀번호" style="padding:10px"></div>';
+  pwHtml+='<div><label style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:5px;display:block">새 비밀번호 (4자 이상)</label><input type="password" class="inp" id="cpNew" placeholder="새 비밀번호" style="padding:10px"></div>';
+  pwHtml+='<div><label style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:5px;display:block">새 비밀번호 확인</label><input type="password" class="inp" id="cpConfirm" placeholder="비밀번호 확인" style="padding:10px"></div>';
+  pwHtml+='</div>';
+  dlg('비밀번호 변경',pwHtml,function(){
+    var curPw=Q('cpCur').value,newPw=Q('cpNew').value,confirmPw=Q('cpConfirm').value;
+    if(!curPw){toast('현재 비밀번호를 입력하세요.');return}
+    if(!newPw||newPw.trim().length<4){toast('새 비밀번호는 4자 이상이어야 합니다.');return}
+    if(newPw!==confirmPw){toast('새 비밀번호가 일치하지 않습니다.');return}
+    hashPwAsync(curPw).then(function(h){
+      if(me.pwHash&&me.pwHash!==h){toast('현재 비밀번호가 일치하지 않습니다.');return}
+      hashPwAsync(newPw.trim()).then(function(nh){
+        me.pwHash=nh;
+        var u=users.find(function(x){return x.id===me.id});
+        if(u)u.pwHash=nh;
+        save('users');closeDlg();toast('비밀번호가 변경되었습니다.');
+      });
     });
   });
 }
@@ -1998,11 +2003,13 @@ function submitNew(){
 // ═══════════════════════════════════════
 var admTab='users';
 function renderAdmin(){
-  var h='<div class="tabs"><button class="tab'+(admTab==='users'?' active':'')+'" onclick="admTab=\'users\';renderAdmin()">\uC0AC\uC6A9\uC790</button><button class="tab'+(admTab==='contacts'?' active':'')+'" onclick="admTab=\'contacts\';renderAdmin()">\uC218\uC2E0\uC790</button><button class="tab'+(admTab==='fields'?' active':'')+'" onclick="admTab=\'fields\';renderAdmin()">\uC785\uB825\uD56D\uBAA9</button><button class="tab'+(admTab==='report'?' active':'')+'" onclick="admTab=\'report\';renderAdmin()">\uBCF4\uACE0\uC11C\uC124\uC815</button><button class="tab'+(admTab==='audit'?' active':'')+'" onclick="admTab=\'audit\';renderAdmin()">\uAC10\uC0AC\uB85C\uADF8</button></div>';
+  var h='<div class="tabs" style="flex-wrap:wrap"><button class="tab'+(admTab==='users'?' active':'')+'" onclick="admTab=\'users\';renderAdmin()">\uC0AC\uC6A9\uC790</button><button class="tab'+(admTab==='contacts'?' active':'')+'" onclick="admTab=\'contacts\';renderAdmin()">\uC218\uC2E0\uC790</button><button class="tab'+(admTab==='fields'?' active':'')+'" onclick="admTab=\'fields\';renderAdmin()">\uC785\uB825\uD56D\uBAA9</button><button class="tab'+(admTab==='report'?' active':'')+'" onclick="admTab=\'report\';renderAdmin()">\uBCF4\uACE0\uC11C\uC124\uC815</button><button class="tab'+(admTab==='send'?' active':'')+'" onclick="admTab=\'send\';renderAdmin()">\uBC1C\uC1A1\uC124\uC815</button><button class="tab'+(admTab==='tracker'?' active':'')+'" onclick="admTab=\'tracker\';renderAdmin()">\uC694\uCCAD\uC774\uB825</button><button class="tab'+(admTab==='audit'?' active':'')+'" onclick="admTab=\'audit\';renderAdmin()">\uAC10\uC0AC\uB85C\uADF8</button></div>';
   if(admTab==='users')h+=renderAdmUsers();
   if(admTab==='contacts')h+=renderAdmContacts();
   if(admTab==='fields')h+=renderAdmFields();
   if(admTab==='report')h+=renderAdmReport();
+  if(admTab==='send')h+=renderAdmSend();
+  if(admTab==='tracker')h+=renderAdmTracker();
   if(admTab==='audit')h+=renderAdmAudit();
   Q('admBody').innerHTML=h;
 }
@@ -2021,7 +2028,7 @@ function renderAdmUsers(){
     else{h+=esc(u.dept)+(u.pos?' \xB7 '+esc(u.pos):'');}
     h+='</td><td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><button class="perm-btn st-'+u.status+'" onclick="cycSt('+i+')">'+sl[u.status]+'</button></td>';
     Object.keys(MOD).forEach(function(mk){h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><button class="perm-btn perm-'+u.perms[mk]+'" onclick="cycPerm('+i+',\''+mk+'\')">'+pl[u.perms[mk]]+'</button></td>'});
-    h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><div style="display:flex;gap:4px;justify-content:center"><button class="btn btn-gh btn-xs" onclick="editUser('+i+')">'+(isEd?'\u2714':'\u270F\uFE0F')+'</button><button class="btn btn-gh btn-xs" onclick="resetUserPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uCD08\uAE30\uD654">\uD83D\uDD11</button>'+(isEd?'<button class="btn btn-gh btn-xs" onclick="promptSetPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uC124\uC815">\uD83D\uDD12</button>':'')+'<button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></td></tr>'});
+    h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><div style="display:flex;gap:4px;justify-content:center"><button class="btn btn-gh btn-xs" onclick="editUser('+i+')">'+(isEd?'\u2714':'\u270F\uFE0F')+'</button><button class="btn btn-gh btn-xs" onclick="resetUserPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uCD08\uAE30\uD654">\uD83D\uDD11</button><button class="btn btn-gh btn-xs" onclick="promptSetPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uC124\uC815">\uD83D\uDD12</button><button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></td></tr>'});
   h+='</tbody></table></div></div>';
   h+='<div class="admin-cards" style="display:none">';users.forEach(function(u,i){h+='<div class="card" style="padding:16px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><b>'+esc(u.name)+'</b>'+(u.role==='admin'?' <span style="font-size:10px;background:var(--blue-l);color:var(--blue);padding:1px 6px;border-radius:4px;font-weight:700">ADMIN</span>':'')+'<p style="font-size:12px;color:var(--g400)">'+esc(u.dept)+(u.pos?' \xB7 '+esc(u.pos):'')+'</p></div><div style="display:flex;gap:4px"><button class="perm-btn st-'+u.status+'" onclick="cycSt('+i+')">'+sl[u.status]+'</button><button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">';Object.keys(MOD).forEach(function(mk){var mv=MOD[mk];h+='<button onclick="cycPerm('+i+',\''+mk+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;border:1px solid var(--g200);background:var(--g50)"><span style="font-size:11px;font-weight:700">'+mv.icon+'</span><span class="perm-btn perm-'+u.perms[mk]+'" style="font-size:10px">'+pl[u.perms[mk]]+'</span></button>'});h+='</div></div>'});h+='</div>';
   return h;
@@ -2072,6 +2079,134 @@ function renderAdmReport(){
   h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r);border:1px solid var(--g200)"><span style="font-weight:600">\uD5E4\uB354 \uC0C9\uC0C1 1</span><input type="color" value="#'+rc.headerColor1+'" onchange="reportConfig.headerColor1=this.value.substring(1)" style="width:40px;height:30px;border:none;cursor:pointer;border-radius:4px"></div>';
   h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--r);border:1px solid var(--g200)"><span style="font-weight:600">\uD5E4\uB354 \uC0C9\uC0C1 2</span><input type="color" value="#'+rc.headerColor2+'" onchange="reportConfig.headerColor2=this.value.substring(1)" style="width:40px;height:30px;border:none;cursor:pointer;border-radius:4px"></div>';
   h+='</div></div>';return h;
+}
+
+function renderAdmSend(){
+  loadSettings();
+  var h='<div class="card" style="padding:20px"><h3 style="font-size:16px;font-weight:800;margin-bottom:16px">📨 이메일/SMS 발송 설정</h3>';
+  h+='<div style="display:flex;flex-direction:column;gap:16px">';
+  // Environment mode
+  h+='<div style="padding:14px;border-radius:var(--r);border:1px solid var(--g200)"><div style="font-weight:700;margin-bottom:8px">운영 모드</div>';
+  h+='<div style="display:flex;gap:8px"><button id="modeCorpBtn" class="btn '+(appSettings.envMode==='corporate'?'btn-p':'btn-gh')+'" onclick="appSettings.envMode=\'corporate\';saveSettingsQuick();renderAdmin()">🏢 사내망 (Outlook/문자앱)</button>';
+  h+='<button id="modeExtBtn" class="btn '+(appSettings.envMode!=='corporate'?'btn-p':'btn-gh')+'" onclick="appSettings.envMode=\'external\';saveSettingsQuick();renderAdmin()">🌐 외부망 (API 연동)</button></div>';
+  h+='<p style="font-size:12px;color:var(--g400);margin-top:8px">사내망: Outlook/문자앱 자동 실행 | 외부망: EmailJS/Webhook으로 자동 발송</p></div>';
+  if(appSettings.envMode!=='corporate'){
+    // EmailJS Settings
+    h+='<div style="padding:14px;border-radius:var(--r);border:1px solid var(--blue-m);background:var(--blue-l)">';
+    h+='<div style="font-weight:700;color:var(--blue);margin-bottom:10px">📧 이메일 발송 방식</div>';
+    h+='<select class="inp" id="setEmailMethod" style="margin-bottom:10px;padding:8px" onchange="appSettings.emailMethod=this.value;saveSettingsQuick();renderAdmin()">';
+    h+='<option value="mailto"'+(appSettings.emailMethod==='mailto'?' selected':'')+'>mailto (기본 메일앱)</option>';
+    h+='<option value="emailjs"'+(appSettings.emailMethod==='emailjs'?' selected':'')+'>EmailJS (무료 API)</option>';
+    h+='<option value="webhook"'+(appSettings.emailMethod==='webhook'?' selected':'')+'>Webhook (커스텀)</option></select>';
+    if(appSettings.emailMethod==='emailjs'){
+      h+='<div style="display:flex;flex-direction:column;gap:8px">';
+      h+='<input class="inp" id="setEjsService" value="'+esc(appSettings.emailjsService)+'" placeholder="Service ID (예: service_xxx)" style="padding:8px">';
+      h+='<input class="inp" id="setEjsTemplate" value="'+esc(appSettings.emailjsTemplate)+'" placeholder="Template ID (예: template_xxx)" style="padding:8px">';
+      h+='<input class="inp" id="setEjsKey" value="'+esc(appSettings.emailjsKey)+'" placeholder="Public Key (예: user_xxx)" style="padding:8px">';
+      h+='<button class="btn btn-p btn-s" onclick="testEmailJS()" style="align-self:flex-start">테스트 발송</button>';
+      h+='<p style="font-size:11px;color:var(--g400)">EmailJS 무료 가입: <a href="https://www.emailjs.com" target="_blank" style="color:var(--blue)">emailjs.com</a> → 월 200건 무료</p>';
+      h+='</div>';
+    }
+    if(appSettings.emailMethod==='webhook'){
+      h+='<div style="display:flex;flex-direction:column;gap:8px">';
+      h+='<input class="inp" id="setEmailWebhook" value="'+esc(appSettings.emailWebhook)+'" placeholder="Webhook URL" style="padding:8px">';
+      h+='<input class="inp" id="setEmailApiKey" value="'+esc(appSettings.emailApiKey)+'" placeholder="API Key (선택)" style="padding:8px">';
+      h+='</div>';
+    }
+    h+='</div>';
+    // SMS Settings
+    h+='<div style="padding:14px;border-radius:var(--r);border:1px solid var(--green-m);background:var(--green-l)">';
+    h+='<div style="font-weight:700;color:var(--green);margin-bottom:10px">📱 SMS 발송 방식</div>';
+    h+='<select class="inp" id="setSmsMethod" style="margin-bottom:10px;padding:8px" onchange="appSettings.smsMethod=this.value;saveSettingsQuick();renderAdmin()">';
+    h+='<option value="sms_uri"'+(appSettings.smsMethod==='sms_uri'?' selected':'')+'>sms: URI (문자앱 열기)</option>';
+    h+='<option value="webhook_sms"'+(appSettings.smsMethod==='webhook_sms'?' selected':'')+'>Webhook (커스텀 API)</option></select>';
+    if(appSettings.smsMethod==='webhook_sms'){
+      h+='<div style="display:flex;flex-direction:column;gap:8px">';
+      h+='<input class="inp" id="setSmsWebhook" value="'+esc(appSettings.smsWebhook)+'" placeholder="SMS Webhook URL" style="padding:8px">';
+      h+='<input class="inp" id="setSmsApiKey" value="'+esc(appSettings.smsApiKey)+'" placeholder="SMS API Key (선택)" style="padding:8px">';
+      h+='</div>';
+    }
+    h+='</div>';
+  }
+  // Common settings
+  h+='<div style="padding:14px;border-radius:var(--r);border:1px solid var(--g200)">';
+  h+='<div style="font-weight:700;margin-bottom:8px">발신자 정보</div>';
+  h+='<input class="inp" id="setCorpSenderName" value="'+esc(appSettings.corpSenderName)+'" placeholder="발신자명 (예: 광양제철소 의전팀)" style="padding:8px;margin-bottom:8px">';
+  h+='<textarea class="inp" id="setCorpSignature" rows="3" placeholder="서명 (이메일 하단에 추가)" style="padding:8px">'+esc(appSettings.corpSignature)+'</textarea>';
+  h+='</div>';
+  h+='<button class="btn btn-p" onclick="saveSettingsFull();toast(\'설정이 저장되었습니다.\')">💾 설정 저장</button>';
+  h+='</div></div>';
+  return h;
+}
+function saveSettingsQuick(){
+  try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
+}
+function saveSettingsFull(){
+  var fields={
+    setEjsService:'emailjsService',setEjsTemplate:'emailjsTemplate',setEjsKey:'emailjsKey',
+    setEmailWebhook:'emailWebhook',setEmailApiKey:'emailApiKey',
+    setSmsWebhook:'smsWebhook',setSmsApiKey:'smsApiKey',
+    setCorpSenderName:'corpSenderName',setCorpSignature:'corpSignature'
+  };
+  Object.keys(fields).forEach(function(elId){
+    var el=Q(elId);if(el)appSettings[fields[elId]]=el.value;
+  });
+  saveSettingsQuick();
+}
+
+var featureTracker=[
+  {id:1,cat:'핵심기능',name:'캘린더 월/주/일 뷰',status:'done',method:'직접 구현',date:'2026-03-20',note:'월간/주간/일간 전환 완료'},
+  {id:2,cat:'핵심기능',name:'VIP 방문 일정 관리',status:'done',method:'직접 구현',date:'2026-03-20',note:'타임라인, 체크리스트 포함'},
+  {id:3,cat:'핵심기능',name:'식음/숙박/골프 모듈',status:'done',method:'직접 구현',date:'2026-03-20',note:'4개 모듈 완료'},
+  {id:4,cat:'핵심기능',name:'사용자 권한 관리',status:'done',method:'직접 구현',date:'2026-03-20',note:'역할별 읽기/쓰기 권한'},
+  {id:5,cat:'핵심기능',name:'수신자 관리 (CSV 업로드)',status:'done',method:'직접 구현',date:'2026-03-20',note:'CSV 드래그앤드롭 지원'},
+  {id:6,cat:'알림',name:'알림 메시지 생성/편집',status:'done',method:'직접 구현',date:'2026-03-20',note:'이메일/SMS 메시지 자동 생성'},
+  {id:7,cat:'알림',name:'이메일 발송 기능',status:'done',method:'mailto/EmailJS/Webhook',date:'2026-03-22',note:'사내망:Outlook, 외부망:EmailJS API 연동'},
+  {id:8,cat:'알림',name:'SMS 발송 기능',status:'done',method:'sms URI/Webhook',date:'2026-03-22',note:'모바일:문자앱, API:Webhook 연동'},
+  {id:9,cat:'알림',name:'발송 설정 UI (관리자)',status:'done',method:'관리자 페이지 탭 추가',date:'2026-03-22',note:'EmailJS/Webhook 설정 화면'},
+  {id:10,cat:'보고서',name:'PPT 보고서 내보내기',status:'done',method:'PptxGenJS blob 방식',date:'2026-03-22',note:'파일 손상 문제 수정 완료'},
+  {id:11,cat:'보고서',name:'이미지 저장 기능',status:'done',method:'html2canvas',date:'2026-03-20',note:''},
+  {id:12,cat:'보고서',name:'보고서 레이아웃 설정',status:'done',method:'관리자 페이지',date:'2026-03-20',note:'색상, 항목 선택 가능'},
+  {id:13,cat:'사용자',name:'비밀번호 변경 기능',status:'done',method:'SHA-256 해시',date:'2026-03-22',note:'모달 UI로 개선'},
+  {id:14,cat:'사용자',name:'비밀번호 초기화 (관리자)',status:'done',method:'관리자 페이지',date:'2026-03-22',note:'초기화(1234) 및 직접 설정'},
+  {id:15,cat:'사용자',name:'비밀번호 직접 설정 (관리자)',status:'done',method:'관리자 페이지',date:'2026-03-22',note:'편집 모드 외에도 항상 표시'},
+  {id:16,cat:'관리',name:'감사 로그',status:'done',method:'직접 구현',date:'2026-03-20',note:'생성/수정/삭제 이력'},
+  {id:17,cat:'관리',name:'요청사항 이력관리',status:'done',method:'관리자 페이지 탭',date:'2026-03-22',note:'모든 요청사항 추적'},
+  {id:18,cat:'배포',name:'GitHub Pages 배포',status:'done',method:'RPA 브라우저 자동화',date:'2026-03-22',note:'seongchun.github.io/protocol-master'},
+  {id:19,cat:'기타',name:'PWA 오프라인 지원',status:'done',method:'Service Worker',date:'2026-03-20',note:'manifest.json, sw.js'},
+  {id:20,cat:'기타',name:'다중 일자 일정 표시',status:'done',method:'캘린더 UI',date:'2026-03-20',note:'시작~종료일 바 형태 표시'},
+  {id:21,cat:'기타',name:'입력항목 커스터마이징',status:'done',method:'관리자 페이지',date:'2026-03-20',note:'모듈별 필드 추가/삭제'}
+];
+function renderAdmTracker(){
+  var cats={};featureTracker.forEach(function(f){if(!cats[f.cat])cats[f.cat]=[];cats[f.cat].push(f)});
+  var total=featureTracker.length,done=featureTracker.filter(function(f){return f.status==='done'}).length;
+  var prog=total?Math.round(done/total*100):0;
+  var h='<div class="card" style="padding:20px"><h3 style="font-size:16px;font-weight:800;margin-bottom:6px">📋 요청사항 이력 관리</h3>';
+  h+='<p style="font-size:13px;color:var(--g500);margin-bottom:16px">모든 요청 기능의 구현 현황을 추적합니다.</p>';
+  // Progress bar
+  h+='<div style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-weight:700;font-size:14px">전체 진행률</span><span style="font-weight:800;color:var(--blue)">'+done+'/'+total+' ('+prog+'%)</span></div>';
+  h+='<div style="height:8px;background:var(--g100);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+prog+'%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:4px;transition:width .3s"></div></div></div>';
+  // Category sections
+  Object.keys(cats).forEach(function(cat){
+    var items=cats[cat],catDone=items.filter(function(f){return f.status==='done'}).length;
+    h+='<div style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><h4 style="font-size:14px;font-weight:800">'+esc(cat)+'</h4><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:'+(catDone===items.length?'var(--green-l)':'var(--amber-l)')+';color:'+(catDone===items.length?'var(--green-d)':'var(--amber-d)')+';font-weight:700">'+catDone+'/'+items.length+'</span></div>';
+    items.forEach(function(f){
+      var sc=f.status==='done'?'var(--green)':f.status==='progress'?'var(--blue)':'var(--g400)';
+      var sl=f.status==='done'?'완료':f.status==='progress'?'진행중':'대기';
+      var bg=f.status==='done'?'var(--green-l)':f.status==='progress'?'var(--blue-l)':'var(--g50)';
+      h+='<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:4px;background:'+bg+';border:1px solid '+(f.status==='done'?'var(--green-m)':'var(--g200)')+'">';
+      h+='<span style="font-size:16px;margin-top:1px">'+(f.status==='done'?'✅':f.status==='progress'?'🔄':'⬜')+'</span>';
+      h+='<div style="flex:1"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><b style="font-size:13px">'+esc(f.name)+'</b>';
+      h+='<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--g100);color:var(--g500);font-weight:600">'+esc(f.method)+'</span></div>';
+      if(f.note)h+='<div style="font-size:12px;color:var(--g500);margin-top:3px">'+esc(f.note)+'</div>';
+      h+='</div>';
+      h+='<span style="font-size:11px;color:var(--g400);white-space:nowrap">'+esc(f.date)+'</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  return h;
 }
 
 function renderAdmAudit(){
@@ -2307,7 +2442,13 @@ function loadPptxLib(cb){
   var s=document.createElement('script');
   s.src='https://cdnjs.cloudflare.com/ajax/libs/PptxGenJS/3.12.0/pptxgen.bundle.js';
   s.onload=function(){_pptxLoaded=true;cb()};
-  s.onerror=function(){toast('PPT 라이브러리 로드 실패. 인터넷 연결을 확인하세요.')};
+  s.onerror=function(){
+    var s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js';
+    s2.onload=function(){_pptxLoaded=true;cb()};
+    s2.onerror=function(){toast('PPT 라이브러리 로드 실패. 인터넷 연결을 확인하세요.')};
+    document.head.appendChild(s2);
+  };
   document.head.appendChild(s);
 }
 function exportPPTX(){
@@ -2384,10 +2525,22 @@ function _buildPPTX(ev){
     s3.addTable(clRows,{x:0.3,y:1.1,w:9.4,fontSize:12,fontFace:'Malgun Gothic',border:{type:'solid',pt:0.5,color:'E2E8F0'},colW:[5.0,2.2,2.2]});
     s3.addText(rc.companyName+' 의전 마스터',{x:0.5,y:5.1,w:9,h:0.3,fontSize:9,color:'94A3B8',align:'right',fontFace:'Malgun Gothic'});
   }
-  // Generate and download
-  pres.writeFile({fileName:'보고서_'+ev.title.replace(/\s+/g,'_')+'.pptx'}).then(function(){
+  // Generate and download using blob for reliability
+  var fileName='보고서_'+ev.title.replace(/\s+/g,'_')+'.pptx';
+  pres.write({outputType:'blob'}).then(function(blob){
+    var url=URL.createObjectURL(new Blob([blob],{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}));
+    var a=document.createElement('a');
+    a.href=url;a.download=fileName;
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url)},500);
     toast('PPT가 저장되었습니다.');
-  }).catch(function(e){toast('PPT 저장 오류: '+e.message)});
+  }).catch(function(e){
+    console.error('PPT write error:',e);
+    // Fallback: try writeFile method
+    pres.writeFile({fileName:fileName}).then(function(){
+      toast('PPT가 저장되었습니다 (대체 방식).');
+    }).catch(function(e2){toast('PPT 저장 오류: '+e2.message)});
+  });
 }
 
 // ═══════════════════════════════════════
