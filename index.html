@@ -318,7 +318,7 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
     <div id="liErr" class="login-err"></div>
     <button id="liBtn" class="login-btn">로그인</button>
   </div>
-  <div style="text-align:center;font-size:12px;color:var(--g400);margin-top:20px;line-height:1.6">테스트: <b style="color:var(--g600)">admin</b> 또는 <b style="color:var(--g600)">park.jy</b> (비밀번호 아무거나)</div>
+  <div style="text-align:center;font-size:12px;color:var(--g400);margin-top:20px;line-height:1.6">테스트: <b style="color:var(--g600)">admin</b> 또는 <b style="color:var(--g600)">park.jy</b> (초기 비밀번호: <b>1234</b>)</div>
 </div>
 </div>
 
@@ -336,6 +336,7 @@ label input[type=checkbox]:checked+span::before{transform:translateX(20px)}
       <div id="avBtn" class="avatar" onclick="Q('dd').classList.toggle('show')"><span id="avL"></span>
         <div id="dd" class="dd as">
           <div style="padding:10px 14px;border-bottom:1px solid var(--g100)"><p id="ddN" style="font-weight:800;font-size:14px"></p><p id="ddI" style="color:var(--g400);font-size:12px"></p></div>
+          <button class="dd-item" onclick="changePw()">🔒 비밀번호 변경</button>
           <button class="dd-item danger" onclick="logout()">로그아웃</button>
         </div>
       </div>
@@ -806,14 +807,35 @@ var _sampleEvents=[
 
 var auditLogs=[];
 
-var users=[{"id": 1, "loginId": "admin", "name": "관리자", "dept": "행정섭외그룹", "pos": "그룹장", "role": "admin", "status": "active", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}, {"id": 2, "loginId": "park.jy", "name": "박지영", "dept": "행정섭외그룹", "pos": "대리", "role": "user", "status": "active", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}];
+var users=[{"id": 1, "loginId": "admin", "name": "관리자", "dept": "행정섭외그룹", "pos": "그룹장", "role": "admin", "status": "active", "pwHash": "", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}, {"id": 2, "loginId": "park.jy", "name": "박지영", "dept": "행정섭외그룹", "pos": "대리", "role": "user", "status": "active", "pwHash": "", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}];
+// Password hashing (SHA-256 based simple hash for client-side)
+function hashPw(pw){
+  var hash=0,i,chr;pw=pw+'_pm_salt_2026';
+  for(i=0;i<pw.length;i++){chr=pw.charCodeAt(i);hash=((hash<<5)-hash)+chr;hash|=0}
+  // Generate a longer hash by iterating
+  var h2=hash,h3=0;
+  for(i=0;i<pw.length;i++){chr=pw.charCodeAt(i);h2=((h2<<7)-h2)+chr+i;h2|=0;h3=((h3<<3)-h3)+chr*i;h3|=0}
+  return Math.abs(hash).toString(36)+Math.abs(h2).toString(36)+Math.abs(h3).toString(36);
+}
+// Async SHA-256 for stronger hashing (used if Web Crypto available)
+function hashPwAsync(pw){
+  if(window.crypto&&window.crypto.subtle){
+    var enc=new TextEncoder();
+    return crypto.subtle.digest('SHA-256',enc.encode(pw+'_pm_salt_2026')).then(function(buf){
+      var arr=Array.from(new Uint8Array(buf));
+      return arr.map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+    });
+  }
+  return Promise.resolve(hashPw(pw));
+}
+var _defaultPwHash='';// will be set on init
 var _sampleUsers=[
-  {id:1,loginId:'admin',name:'\uAD00\uB9AC\uC790',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uADF8\uB8F9\uC7A5',role:'admin',status:'active',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'readwrite',golf:'readwrite'}},
-  {id:2,loginId:'park.jy',name:'\uBC15\uC9C0\uC601',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uB300\uB9AC',role:'user',status:'active',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'readwrite',golf:'readwrite'}},
-  {id:3,loginId:'kim.hs',name:'\uAE40\uD604\uC218',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uC8FC\uC784',role:'user',status:'active',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'read',golf:'read'}},
-  {id:4,loginId:'lee.mj',name:'\uC774\uBBFC\uC9C0',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uC0AC\uC6D0',role:'user',status:'active',perms:{vip_visit:'read',dining:'read',lodging:'readwrite',golf:'readwrite'}},
-  {id:5,loginId:'choi.dh',name:'\uCD5C\uB3D9\uD6C8',dept:'\uACBD\uC601\uC9C0\uC6D0\uC2E4',pos:'\uACFC\uC7A5',role:'user',status:'pending',perms:{vip_visit:'none',dining:'none',lodging:'none',golf:'none'}}
-];;
+  {id:1,loginId:'admin',name:'\uAD00\uB9AC\uC790',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uADF8\uB8F9\uC7A5',role:'admin',status:'active',pwHash:'',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'readwrite',golf:'readwrite'}},
+  {id:2,loginId:'park.jy',name:'\uBC15\uC9C0\uC601',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uB300\uB9AC',role:'user',status:'active',pwHash:'',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'readwrite',golf:'readwrite'}},
+  {id:3,loginId:'kim.hs',name:'\uAE40\uD604\uC218',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uC8FC\uC784',role:'user',status:'active',pwHash:'',perms:{vip_visit:'readwrite',dining:'readwrite',lodging:'read',golf:'read'}},
+  {id:4,loginId:'lee.mj',name:'\uC774\uBBFC\uC9C0',dept:'\uD589\uC815\uC12D\uC678\uADF8\uB8F9',pos:'\uC0AC\uC6D0',role:'user',status:'active',pwHash:'',perms:{vip_visit:'read',dining:'read',lodging:'readwrite',golf:'readwrite'}},
+  {id:5,loginId:'choi.dh',name:'\uCD5C\uB3D9\uD6C8',dept:'\uACBD\uC601\uC9C0\uC6D0\uC2E4',pos:'\uACFC\uC7A5',role:'user',status:'pending',pwHash:'',perms:{vip_visit:'none',dining:'none',lodging:'none',golf:'none'}}
+];
 
 var me=null,calY,calM,selDate=null,curView='month',curEv=null,editing=false,editD={},newMod='vip_visit';
 var filters={vip_visit:true,dining:true,lodging:true,golf:true};
@@ -1213,6 +1235,16 @@ function doLogin(){
   if(!u){er.textContent='\uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uC544\uC774\uB514\uC785\uB2C8\uB2E4.';er.style.display='block';return}
   if(u.status==='pending'){er.textContent='\uAD00\uB9AC\uC790 \uC2B9\uC778 \uB300\uAE30 \uC911\uC785\uB2C8\uB2E4.';er.style.display='block';return}
   if(u.status==='disabled'){er.textContent='\uBE44\uD65C\uC131\uD654\uB41C \uACC4\uC815\uC785\uB2C8\uB2E4.';er.style.display='block';return}
+  // Password verification
+  hashPwAsync(pw).then(function(hashed){
+    if(u.pwHash&&u.pwHash!==hashed){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
+    // If no password set yet (migration), set it now
+    if(!u.pwHash){u.pwHash=hashed;save('users')}
+    _completeLogin(u);
+  });
+}
+function _completeLogin(u){
+  var er=Q('liErr');er.style.display='none';
   me=u;Q('pgLogin').style.display='none';Q('app').style.display='';
   Q('avL').textContent=u.name[0];Q('ddN').textContent=u.name;Q('ddI').textContent=u.dept+' \xB7 '+u.pos;
   loadSettings();
@@ -1235,6 +1267,24 @@ function doLogin(){
   }
 }
 function logout(){me=null;Q('pgLogin').style.display='';Q('app').style.display='none';Q('liId').value='';Q('liPw').value='';Q('liErr').style.display='none';Q('btnAdmin').style.display='none'}
+function changePw(){
+  Q('dd').classList.remove('show');
+  var curPw=prompt('\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694:');
+  if(!curPw)return;
+  hashPwAsync(curPw).then(function(h){
+    if(me.pwHash&&me.pwHash!==h){toast('\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.');return}
+    var newPw=prompt('\uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694 (4\uC790 \uC774\uC0C1):');
+    if(!newPw||newPw.trim().length<4){toast('\uBE44\uBC00\uBC88\uD638\uB294 4\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');return}
+    var confirmPw=prompt('\uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uD55C\uBC88 \uB354 \uC785\uB825\uD558\uC138\uC694:');
+    if(newPw!==confirmPw){toast('\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.');return}
+    hashPwAsync(newPw.trim()).then(function(nh){
+      me.pwHash=nh;
+      var u=users.find(function(x){return x.id===me.id});
+      if(u)u.pwHash=nh;
+      save('users');toast('\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.');
+    });
+  });
+}
 
 // ═══════════════════════════════════════
 // NAV
@@ -1273,7 +1323,7 @@ function renderMonth(){
     h+='<div class="cal-cell'+(selDate===ds?' sel':'')+(isPast?' past':'')+'" data-d="'+ds+'"><div style="display:flex;align-items:center;justify-content:space-between"><span class="cal-day'+(ds===tdy?' today':'')+(dow===0?' sun':'')+(dow===6?' sat':'')+'">'+d+'</span>';if(devts.length)h+='<span style="font-size:10px;color:var(--g400);font-weight:600">'+devts.length+'</span>';h+='</div><div style="flex:1;overflow:hidden">';
     // Multi-day bars first
     multiDay.forEach(function(ev){var m=MOD[ev.module];var isStart=ev.startDate===ds,isEnd=ev.endDate===ds;
-      h+='<div class="cal-ev" style="background:'+m.c+';color:#fff;border-color:'+m.c+';border-radius:'+(isStart?'4px':'0')+' '+(isEnd?'4px':'0')+' '+(isEnd?'4px':'0')+' '+(isStart?'4px':'0')+';margin-left:'+(isStart?'0':'-9px')+';margin-right:'+(isEnd?'0':'-9px')+';padding-left:'+(isStart?'6px':'4px')+';border-left:'+(isStart?'3px solid '+m.d:'none')+'">'+(isStart?'<span class="evt truncate">'+esc(ev.title)+'</span>':'<span style="font-size:9px;opacity:.7">\u00A0</span>')+'</div>'});
+      h+='<div class="cal-ev" style="background:'+m.c+';color:#fff;border-color:'+m.c+';border-radius:'+(isStart?'4px':'0')+' '+(isEnd?'4px':'0')+' '+(isEnd?'4px':'0')+' '+(isStart?'4px':'0')+';margin-left:'+(isStart?'0':'-9px')+';margin-right:'+(isEnd?'0':'-9px')+';padding-left:'+(isStart?'6px':'4px')+';border-left:'+(isStart?'3px solid '+m.d:'none')+'"><span class="evt truncate">'+(isStart?esc(ev.title):(isEnd?esc(ev.title):'↳ '+esc(ev.title)))+'</span></div>'});
     // Single-day events
     var maxShow=3-multiDay.length;
     singleDay.slice(0,Math.max(maxShow,1)).forEach(function(ev){var m=MOD[ev.module];h+='<div class="cal-ev" style="background:'+m.l+';color:'+m.d+';border-color:'+m.c+'"><span class="evt truncate">'+esc(ev.title)+'</span></div>'});
@@ -1638,6 +1688,123 @@ function genNotiMsg(ev,type,cat){
     return s;
   }
 }
+function genNotiHtml(ev,cat){
+  cat=cat||'일정개요';
+  var m=MOD[ev.module],rc=reportConfig,c=cnt(ev);
+  var loc='';
+  if(ev.module==='dining')loc=ev.hallName||'';
+  else if(ev.module==='lodging')loc=ev.roomType||'';
+  else if(ev.module==='golf')loc=ev.courseName||'';
+  else loc=ev.route?ev.route.split('\u2192')[0]:'';
+  var h='<html><head><meta charset="UTF-8"><style>';
+  h+='body{font-family:"Noto Sans KR",sans-serif;line-height:1.6;color:#1E293B;margin:0;padding:0;background:#F8FAFC}';
+  h+='.container{max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:8px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07)}';
+  h+='.header{background:linear-gradient(135deg,'+m.c+','+m.d+');color:#FFFFFF;padding:24px;text-align:center}';
+  h+='.header h1{margin:0;font-size:24px;font-weight:700}';
+  h+='.header p{margin:8px 0 0 0;font-size:14px;opacity:0.9}';
+  h+='.content{padding:24px}';
+  h+='.section{margin-bottom:20px}';
+  h+='.section-title{font-size:16px;font-weight:700;color:'+m.c+';border-bottom:3px solid '+m.l+';padding-bottom:10px;margin-bottom:14px}';
+  h+='.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}';
+  h+='.info-item{background:'+m.l+';padding:12px;border-radius:6px;border-left:4px solid '+m.c+'}';
+  h+='.info-label{font-size:12px;font-weight:700;color:'+m.d+';text-transform:uppercase;letter-spacing:0.5px}';
+  h+='.info-value{font-size:14px;font-weight:600;color:#1E293B;margin-top:4px}';
+  h+='table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}';
+  h+='table th{background:'+m.l+';color:'+m.d+';padding:12px;text-align:left;font-weight:700;border-bottom:2px solid '+m.c+'}';
+  h+='table td{padding:10px 12px;border-bottom:1px solid #E2E8F0}';
+  h+='table tr:hover{background:#F8FAFC}';
+  h+='.checklist{list-style:none;padding:0;margin:0}';
+  h+='.checklist li{padding:8px 0;font-size:14px;display:flex;align-items:center;gap:10px}';
+  h+='.checklist-checkbox{width:18px;height:18px;border:2px solid '+m.c+';border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#FFFFFF;background:'+(m.c)+';flex-shrink:0}';
+  h+='.checklist-done .checklist-checkbox{background:'+m.c+';color:#FFFFFF}';
+  h+='.checklist-todo .checklist-checkbox{background:#FFFFFF;color:'+m.c+'}';
+  h+='.memo-box{background:#FEF3C7;padding:14px;border-radius:6px;border-left:4px solid #F59E0B;margin:12px 0}';
+  h+='.memo-box strong{color:#92400E}';
+  h+='.footer{background:#F8FAFC;padding:16px;text-align:center;font-size:12px;color:#64748B;border-top:1px solid #E2E8F0}';
+  h+='.intro{color:#475569;margin-bottom:16px;line-height:1.7}';
+  h+='.note{font-size:12px;color:#64748B;background:#F1F5F9;padding:10px;border-radius:6px;margin-top:8px;border-left:3px solid '+m.c+'}';
+  h+='</style></head><body>';
+  h+='<div class="container">';
+  h+='<div class="header"><div style="font-size:28px;margin-bottom:8px">'+m.icon+'</div><h1>'+esc(ev.title)+'</h1><p>'+m.label+'</p></div>';
+  h+='<div class="content">';
+  if(cat==='일정개요'){
+    h+='<div class="intro">안녕하십니까.<br>'+rc.companyName+' 의전팀입니다.<br><br>아래와 같이 일정을 안내드립니다.</div>';
+  }else if(cat==='세부일정'){
+    h+='<div class="intro">'+esc(ev.title)+' 세부 일정표를 안내드립니다.</div>';
+  }else if(cat==='준비사항'){
+    h+='<div class="intro">'+esc(ev.title)+' 준비사항을 안내드립니다.</div>';
+  }else if(cat==='전체안내'){
+    h+='<div class="intro">'+esc(ev.title)+'의 모든 세부 정보를 안내드립니다.</div>';
+  }else if(cat==='확인요청'){
+    h+='<div class="intro">아래 일정에 대한 참석 여부를 확인하여 회신해 주시기 바랍니다.</div>';
+  }else if(cat==='일정변경'){
+    h+='<div class="intro">아래와 같이 일정이 변경되었음을 안내드립니다.</div>';
+  }else if(cat==='감사인사'){
+    h+='<div class="intro">금번 행사에 참석해 주셔서 진심으로 감사드립니다.</div>';
+  }else if(cat==='긴급'){
+    h+='<div class="intro" style="background:#FEF2F2;border-left:4px solid #DC2626;padding:12px;border-radius:6px"><strong style="color:#DC2626">긴급 안내</strong><br>긴급하게 안내드리오니 즉시 확인 부탁드립니다.</div>';
+  }
+  h+='<div class="section"><div class="section-title">📋 기본 정보</div>';
+  h+='<div class="info-grid">';
+  h+='<div class="info-item"><div class="info-label">일시</div><div class="info-value">'+esc(ev.startDate);
+  if(ev.endDate&&ev.endDate!==ev.startDate)h+=' ~ '+esc(ev.endDate);
+  if(ev.startTime)h+=' '+esc(ev.startTime)+(ev.endTime?'~'+esc(ev.endTime):'');
+  h+='</div></div>';
+  if(loc)h+='<div class="info-item"><div class="info-label">장소</div><div class="info-value">'+esc(loc)+'</div></div>';
+  if(c)h+='<div class="info-item"><div class="info-label">인원</div><div class="info-value">'+c+'명</div></div>';
+  if(ev.visitorInfo)h+='<div class="info-item"><div class="info-label">방문자</div><div class="info-value">'+esc(ev.visitorInfo)+'</div></div>';
+  h+='</div></div>';
+  if(ev.module==='dining'){
+    h+='<div class="section"><div class="section-title">🍽️ 식사 정보</div>';
+    h+='<div class="info-grid">';
+    if(ev.concept)h+='<div class="info-item"><div class="info-label">컨셉</div><div class="info-value">'+esc(ev.concept)+'</div></div>';
+    if(ev.menuDetail)h+='<div class="info-item"><div class="info-label">메뉴</div><div class="info-value">'+esc(ev.menuDetail)+'</div></div>';
+    h+='</div></div>';
+  }else if(ev.module==='golf'){
+    h+='<div class="section"><div class="section-title">⛳ 골프 정보</div>';
+    h+='<div class="info-grid">';
+    if(ev.teeOffTime)h+='<div class="info-item"><div class="info-label">티오프 시간</div><div class="info-value">'+esc(ev.teeOffTime)+'</div></div>';
+    h+='</div></div>';
+  }else if(ev.module==='lodging'){
+    h+='<div class="section"><div class="section-title">🏨 숙박 정보</div>';
+    h+='<div class="info-grid">';
+    if(ev.checkIn)h+='<div class="info-item"><div class="info-label">체크인</div><div class="info-value">'+esc(ev.checkIn)+'</div></div>';
+    if(ev.checkOut)h+='<div class="info-item"><div class="info-label">체크아웃</div><div class="info-value">'+esc(ev.checkOut)+'</div></div>';
+    h+='</div></div>';
+  }
+  if((cat==='세부일정'||cat==='전체안내')&&ev.timeline&&ev.timeline.length){
+    h+='<div class="section"><div class="section-title">⏱️ 타임라인</div>';
+    h+='<table><thead><tr><th style="width:15%">시간</th><th style="width:25%">장소</th><th style="width:25%">담당자</th><th style="width:35%">지원사항</th></tr></thead><tbody>';
+    ev.timeline.forEach(function(t){
+      h+='<tr><td>'+esc(t.time)+(t.endTime?'~'+esc(t.endTime):'')+'</td><td>'+esc(t.place)+'</td><td>'+esc(t.contact||'-')+'</td><td>'+esc(t.support||'-')+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  if((cat==='준비사항'||cat==='전체안내')&&ev.checklist&&ev.checklist.length){
+    h+='<div class="section"><div class="section-title">✅ 체크리스트</div>';
+    h+='<ul class="checklist">';
+    ev.checklist.forEach(function(cl){
+      h+='<li class="'+(cl.done?'checklist-done':'checklist-todo')+'">';
+      h+='<div class="checklist-checkbox">'+(cl.done?'✓':'✗')+'</div>';
+      h+='<span>'+esc(cl.task)+(cl.assignee?' <strong>(담당: '+esc(cl.assignee)+')</strong>':'')+'</span>';
+      h+='</li>';
+    });
+    h+='</ul></div>';
+  }
+  if((cat==='전체안내'||cat==='세부일정')&&ev.memo){
+    h+='<div class="section"><div class="section-title">📝 참고사항</div>';
+    h+='<div class="memo-box"><strong>메모:</strong><br>'+nl(esc(ev.memo))+'</div></div>';
+  }
+  if(cat==='확인요청'){
+    h+='<div class="note"><strong>★</strong> 참석 여부를 본 메일 회신으로 알려주시기 바랍니다.</div>';
+  }
+  h+='</div>';
+  h+='<div class="footer">';
+  h+='감사합니다.<br>';
+  h+='<strong>'+rc.companyName+' 의전팀</strong>';
+  h+='</div></div></body></html>';
+  return h;
+}
 function onNotiTypeChange(ni){syncEditFromDOM();var n=editD.notifications[ni];if(n)n.msg=genNotiMsg(editD,n.type,n.category||'일정개요');renderDetail()}
 function autoFillNotiMsg(ni){syncEditFromDOM();var n=editD.notifications[ni];if(n)n.msg=genNotiMsg(editD,n.type,n.category||'일정개요');renderDetail()}
 function onNotiCatChange(ni){syncEditFromDOM();var n=editD.notifications[ni];if(n)n.msg=genNotiMsg(editD,n.type,n.category||'일정개요');renderDetail()}
@@ -1672,27 +1839,35 @@ function openSendPreview(ni){
   if(!totalCount)h+='<span style="color:var(--g400);font-size:13px">\uC218\uC2E0\uC790\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</span>';
   h+='</div></div>';
   h+='<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:6px">\uBA54\uC2DC\uC9C0 \uB0B4\uC6A9 (\uC218\uC815 \uAC00\uB2A5)</div>';
-  h+='<textarea class="inp" id="sendMsg" rows="4" style="font-size:14px">'+esc(n.msg||'')+'</textarea></div>';
+  if(n.type==='email'){h+='<div style="display:none" id="sendMsgPlain">'+esc(n.msg||'')+'</div>';h+='<textarea class="inp" id="sendMsg" rows="1" style="font-size:14px;display:none">'+esc(n.msg||'')+'</textarea>';}else{h+='<textarea class="inp" id="sendMsg" rows="4" style="font-size:14px">'+esc(n.msg||'')+'</textarea>';
+  }
+  h+='</div>';
   // Sender info
   h+='<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:700;color:var(--g500);margin-bottom:6px">\uBC1C\uC2E0\uC790</div>';
   h+='<div style="display:flex;gap:8px"><input class="inp" id="sendSenderName" value="'+esc(n.senderName||me.name)+'" placeholder="\uBC1C\uC2E0\uC790\uBA85" style="width:140px;padding:8px;font-size:13px">';
   h+='<input class="inp" id="sendSenderContact" value="'+esc(n.senderContact||'')+'" placeholder="'+(n.type==='email'?'\uBC1C\uC2E0 \uC774\uBA54\uC77C':'\uBC1C\uC2E0 \uC804\uD654\uBC88\uD638')+'" style="flex:1;padding:8px;font-size:13px"></div></div>';
   h+='<div style="background:var(--g50);border-radius:var(--r);padding:14px;margin-bottom:20px"><div style="font-size:12px;font-weight:700;color:var(--g400);margin-bottom:8px">\uD83D\uDCE8 \uBC1C\uC1A1 \uBBF8\uB9AC\uBCF4\uAE30</div>';
-  h+='<div style="background:var(--g0);border-radius:8px;padding:16px;border:1px solid var(--g200)">';
-  h+='<div style="font-size:11px;color:var(--g400);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--g100)"><b>\uBC1C\uC2E0:</b> '+esc(n.senderName||me.name)+' ('+esc(n.senderContact||rc.companyName+' \uC758\uC804\uD300')+') | <b>\uC81C\uBAA9:</b> [\uC758\uC804] '+esc(ev.title)+'</div>';
-  h+='<div style="font-size:14px;line-height:1.7;white-space:pre-wrap" id="sendPreviewContent">'+esc(n.msg||'')+'</div>';
-  h+='<div style="font-size:11px;color:var(--g400);margin-top:8px;padding-top:8px;border-top:1px solid var(--g100)">'+esc(rc.companyName||'\uAD11\uC591\uC81C\uCCA0\uC18C')+' \uC758\uC804 \uB9C8\uC2A4\uD130 \uC2DC\uC2A4\uD15C\uC5D0\uC11C \uBC1C\uC1A1\uB41C \uBA54\uC2DC\uC9C0\uC785\uB2C8\uB2E4.</div>';
+  h+='<div style="background:var(--g0);border-radius:8px;padding:16px;border:1px solid var(--g200);overflow:auto;max-height:400px" id="sendPreviewContainer">';
+  if(n.type==='email'){h+='<iframe id="sendPreviewContent" style="border:none;width:100%;background:#FFFFFF" scrolling="no"></iframe>';}else{h+='<div style="font-size:11px;color:var(--g400);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--g100)"><b>\uBC1C\uC2E0:</b> '+esc(n.senderName||me.name)+' ('+esc(n.senderContact||rc.companyName+' \uC758\uC804\uD300')+') | <b>\uC81C\uBAA9:</b> [\uC758\uC804] '+esc(ev.title)+'</div>';
+  h+='<div style="font-size:14px;line-height:1.7;white-space:pre-wrap" id="sendPreviewContent">'+esc(n.msg||'')+'</div>';}
+  h+='<div style="font-size:11px;color:var(--g400);margin-top:8px;padding-top:8px;border-top:1px solid var(--g100)">'+esc(rc.companyName||'\uAD11\uC7A5\uC81C\uCCA0\uC18C')+' \uC758\uC804 \uB9C8\uC2A4\uD130 \uC2DC\uC2A4\uD15C\uC5D0\uC11C \uBC1C\uC1A1\uB41C \uBA54\uC2DC\uC9C0\uC785\uB2C8\uB2E4.</div>';
   h+='</div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-d" style="flex:1" onclick="closeSend()">\uCDE8\uC18C</button>';
   if(n.type==='sms')h+='<button class="btn btn-g" style="flex:1" onclick="executeSend('+ni+',\'sms\')">\uD83D\uDCF1 SMS \uBC1C\uC1A1</button>';
   h+='<button class="btn btn-p" style="flex:1" onclick="executeSend('+ni+',\'email\')">\uD83D\uDCE7 \uC774\uBA54\uC77C \uBC1C\uC1A1</button></div>';
   Q('sendBox').innerHTML=h;Q('sendOv').classList.add('show');
-  var ta=Q('sendMsg');if(ta)ta.oninput=function(){Q('sendPreviewContent').innerHTML=nl(this.value)};
+  if(n.type==='email'){
+    var htmlContent=genNotiHtml(ev,n.category||'일정개요');
+    var iframe=Q('sendPreviewContent');
+    if(iframe){iframe.onload=function(){iframe.contentDocument.open();iframe.contentDocument.write(htmlContent);iframe.contentDocument.close();var h=Math.min(800,iframe.contentDocument.body.scrollHeight+20);iframe.style.height=h+'px'};iframe.src='about:blank'}
+  }else{
+    var ta=Q('sendMsg');if(ta)ta.oninput=function(){Q('sendPreviewContent').innerHTML=nl(this.value)};
+  }
 }
 function executeSend(ni,method){
   if(method!=='sms'&&method!=='email'){toast('지원하지 않는 발송 방식입니다.');return}
   var ev=curEv;if(!ev||!ev.notifications)return;
-  var n=ev.notifications[ni];var msg=Q('sendMsg');if(msg)n.msg=msg.value;
+  var n=ev.notifications[ni];var msg=Q('sendMsg');if(msg&&msg.style.display!=='none')n.msg=msg.value;
   var sn=Q('sendSenderName');if(sn)n.senderName=sn.value;
   var sc=Q('sendSenderContact');if(sc)n.senderContact=sc.value;
   var recips=(n.recipientIds||[]).map(function(rid){return contacts.find(function(x){return x.id===rid})}).filter(Boolean);
@@ -1702,8 +1877,9 @@ function executeSend(ni,method){
     extRecips.forEach(function(er){if(er.email)emails.push(er.email)});
     if(!emails.length){toast('수신자 이메일이 없습니다.');return}
     var subject='[의전] '+ev.title;
-    var fullBody=n.msg;
-    smartSendEmail(emails,subject,fullBody,n.senderName||me.name,n.senderContact).then(function(result){
+    var plainBody=n.msg;
+    var htmlBody=genNotiHtml(ev,n.category||'일정개요');
+    smartSendEmail(emails,subject,plainBody,n.senderName||me.name,n.senderContact,htmlBody).then(function(result){
       n.status='sent';save('events');n.sentAt=now();n.sentBy=me.name;
       closeSend();renderDetail();
       toast(result.msg);
@@ -1845,7 +2021,7 @@ function renderAdmUsers(){
     else{h+=esc(u.dept)+(u.pos?' \xB7 '+esc(u.pos):'');}
     h+='</td><td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><button class="perm-btn st-'+u.status+'" onclick="cycSt('+i+')">'+sl[u.status]+'</button></td>';
     Object.keys(MOD).forEach(function(mk){h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><button class="perm-btn perm-'+u.perms[mk]+'" onclick="cycPerm('+i+',\''+mk+'\')">'+pl[u.perms[mk]]+'</button></td>'});
-    h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><div style="display:flex;gap:4px;justify-content:center"><button class="btn btn-gh btn-xs" onclick="editUser('+i+')">'+(isEd?'\u2714':'\u270F\uFE0F')+'</button><button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></td></tr>'});
+    h+='<td style="padding:12px;border-bottom:1px solid var(--g50);text-align:center"><div style="display:flex;gap:4px;justify-content:center"><button class="btn btn-gh btn-xs" onclick="editUser('+i+')">'+(isEd?'\u2714':'\u270F\uFE0F')+'</button><button class="btn btn-gh btn-xs" onclick="resetUserPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uCD08\uAE30\uD654">\uD83D\uDD11</button>'+(isEd?'<button class="btn btn-gh btn-xs" onclick="promptSetPw('+i+')" title="\uBE44\uBC00\uBC88\uD638 \uC124\uC815">\uD83D\uDD12</button>':'')+'<button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></td></tr>'});
   h+='</tbody></table></div></div>';
   h+='<div class="admin-cards" style="display:none">';users.forEach(function(u,i){h+='<div class="card" style="padding:16px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><b>'+esc(u.name)+'</b>'+(u.role==='admin'?' <span style="font-size:10px;background:var(--blue-l);color:var(--blue);padding:1px 6px;border-radius:4px;font-weight:700">ADMIN</span>':'')+'<p style="font-size:12px;color:var(--g400)">'+esc(u.dept)+(u.pos?' \xB7 '+esc(u.pos):'')+'</p></div><div style="display:flex;gap:4px"><button class="perm-btn st-'+u.status+'" onclick="cycSt('+i+')">'+sl[u.status]+'</button><button class="btn btn-outline-danger btn-xs" onclick="deleteUser('+i+')">\u2715</button></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">';Object.keys(MOD).forEach(function(mk){var mv=MOD[mk];h+='<button onclick="cycPerm('+i+',\''+mk+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;border:1px solid var(--g200);background:var(--g50)"><span style="font-size:11px;font-weight:700">'+mv.icon+'</span><span class="perm-btn perm-'+u.perms[mk]+'" style="font-size:10px">'+pl[u.perms[mk]]+'</span></button>'});h+='</div></div>'});h+='</div>';
   return h;
@@ -1909,7 +2085,18 @@ function renderAdmAudit(){
 function cycSt(i){var c={pending:'active',active:'disabled',disabled:'active'};users[i].status=c[users[i].status];renderAdmin();toast('\uC0C1\uD0DC \uBCC0\uACBD')}
 function cycPerm(i,mk){var c={none:'read',read:'readwrite',readwrite:'none'};users[i].perms[mk]=c[users[i].perms[mk]];renderAdmin();toast('\uAD8C\uD55C \uBCC0\uACBD')}
 var editingUser=-1;
-function addUser(){var nid=Date.now();users.push({id:nid,loginId:'user'+nid%1000,name:'\uC0C8 \uC0AC\uC6A9\uC790',dept:'',pos:'',role:'user',status:'pending',perms:{vip_visit:'none',dining:'none',lodging:'none',golf:'none'}});save('users');editingUser=users.length-1;renderAdmin();toast('\uC0AC\uC6A9\uC790\uAC00 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')}
+function addUser(){var nid=Date.now();users.push({id:nid,loginId:'user'+nid%1000,name:'\uC0C8 \uC0AC\uC6A9\uC790',dept:'',pos:'',role:'user',status:'pending',pwHash:'',perms:{vip_visit:'none',dining:'none',lodging:'none',golf:'none'}});save('users');editingUser=users.length-1;renderAdmin();toast('\uC0AC\uC6A9\uC790\uAC00 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')}
+function resetUserPw(i){
+  dlg('\uBE44\uBC00\uBC88\uD638 \uCD08\uAE30\uD654','\u201C'+esc(users[i].name)+'\u201D\uC758 \uBE44\uBC00\uBC88\uD638\uB97C \uCD08\uAE30\uD654(1234)\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',function(){
+    hashPwAsync('1234').then(function(h){users[i].pwHash=h;save('users');closeDlg();toast('\uBE44\uBC00\uBC88\uD638\uAC00 1234\uB85C \uCD08\uAE30\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')});
+  });
+}
+function promptSetPw(i){
+  var pw=prompt('\u201C'+users[i].name+'\u201D\uC758 \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694:');
+  if(!pw||!pw.trim())return;
+  if(pw.length<4){toast('\uBE44\uBC00\uBC88\uD638\uB294 4\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');return}
+  hashPwAsync(pw.trim()).then(function(h){users[i].pwHash=h;save('users');toast(users[i].name+'\uC758 \uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')});
+}
 function deleteUser(i){if(me&&users[i].id===me.id){toast('현재 로그인한 사용자는 삭제할 수 없습니다.');return}if(users[i].role==='admin'){toast('\uAD00\uB9AC\uC790\uB294 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.');return}dlg('\uC0AC\uC6A9\uC790 \uC0AD\uC81C','\u201C'+esc(users[i].name)+'\u201D \uC0AC\uC6A9\uC790\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',function(){users.splice(i,1);save('users');editingUser=-1;closeDlg();renderAdmin();toast('\uC0AC\uC6A9\uC790\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.')})}
 function editUser(i){editingUser=(editingUser===i)?-1:i;renderAdmin()}
 function saveUserField(i,field,val){users[i][field]=val;save('users')}
@@ -2113,111 +2300,94 @@ function exportImage(){
   toast('이미지가 저장되었습니다.');
 }
 
-// ── PPTX EXPORT ──
-function crc32(bytes){var tbl=[];for(var i=0;i<256;i++){var c=i;for(var j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);tbl[i]=c}var crc=0xFFFFFFFF;for(var i=0;i<bytes.length;i++)crc=tbl[(crc^bytes[i])&0xFF]^(crc>>>8);return(crc^0xFFFFFFFF)>>>0}
-function buildZip(files){
-  var enc=new TextEncoder(),parts=[],centrals=[],offset=0;
-  files.forEach(function(f){
-    var nb=enc.encode(f.name),cb=enc.encode(f.content),cr=crc32(cb);
-    var lh=new ArrayBuffer(30+nb.length);var lv=new DataView(lh);
-    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);lv.setUint16(8,0,true);
-    lv.setUint32(14,cr,true);lv.setUint32(18,cb.length,true);lv.setUint32(22,cb.length,true);lv.setUint16(26,nb.length,true);
-    new Uint8Array(lh).set(nb,30);parts.push(new Uint8Array(lh));parts.push(cb);
-    var ch=new ArrayBuffer(46+nb.length);var cv=new DataView(ch);
-    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);
-    cv.setUint32(16,cr,true);cv.setUint32(20,cb.length,true);cv.setUint32(24,cb.length,true);cv.setUint16(28,nb.length,true);cv.setUint32(42,offset,true);
-    new Uint8Array(ch).set(nb,46);centrals.push(new Uint8Array(ch));
-    offset+=30+nb.length+cb.length;
-  });
-  var csz=centrals.reduce(function(s,p){return s+p.length},0);
-  var end=new ArrayBuffer(22);var ev=new DataView(end);
-  ev.setUint32(0,0x06054b50,true);ev.setUint16(8,files.length,true);ev.setUint16(10,files.length,true);ev.setUint32(12,csz,true);ev.setUint32(16,offset,true);
-  return new Blob(parts.concat(centrals).concat([new Uint8Array(end)]),{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
-}
-function xesc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-function pptxTx(x,y,w,h,text,opts){
-  opts=opts||{};var sz=opts.sz||1800,b=opts.b?'b="1" ':'',clr=opts.clr||'000000',align=opts.align||'l';
-  var uid=opts.id||2;
-  var lines=String(text).split('\n');var paras='';
-  lines.forEach(function(line){paras+='<a:p><a:pPr algn="'+align+'"/><a:r><a:rPr lang="ko-KR" sz="'+sz+'" '+b+'dirty="0"><a:solidFill><a:srgbClr val="'+clr+'"/></a:solidFill><a:latin typeface="Calibri"/><a:ea typeface="Calibri"/></a:rPr><a:t>'+xesc(line)+'</a:t></a:r></a:p>'});
-  return '<p:sp><p:nvSpPr><p:cNvPr id="'+uid+'" name="tx'+uid+'"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'+(opts.bg?'<a:solidFill><a:srgbClr val="'+opts.bg+'"/></a:solidFill>':'<a:noFill/>')+'</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/><a:lstStyle/>'+paras+'</p:txBody></p:sp>';
-}
-function pptxRect(x,y,w,h,clr,uid){
-  uid=uid||100;
-  return '<p:sp><p:nvSpPr><p:cNvPr id="'+uid+'" name="bg'+uid+'"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="'+clr+'"/></a:solidFill></p:spPr></p:sp>';
+// ── PPTX EXPORT (PptxGenJS CDN) ──
+var _pptxLoaded=false;
+function loadPptxLib(cb){
+  if(_pptxLoaded&&window.PptxGenJS){cb();return}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/PptxGenJS/3.12.0/pptxgen.bundle.js';
+  s.onload=function(){_pptxLoaded=true;cb()};
+  s.onerror=function(){toast('PPT 라이브러리 로드 실패. 인터넷 연결을 확인하세요.')};
+  document.head.appendChild(s);
 }
 function exportPPTX(){
-  var ev=curEv;if(!ev)return;var m=MOD[ev.module];var SW=12192000,SH=6858000;
-  var ns='xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
-  var rc=reportConfig;
-  // Slide 1: Title
-  var s1='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld '+ns+'><p:cSld>';
-  s1+='<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
-  s1+=pptxRect(0,0,SW,2200000,rc.headerColor1,100);
-  s1+=pptxTx(457200,300000,11000000,500000,rc.companyName+' 의전 보고서',{sz:1400,clr:'CCDDEE',id:2});
-  s1+=pptxTx(457200,700000,11000000,900000,ev.title,{sz:3600,b:true,clr:'FFFFFF',id:3});
-  s1+=pptxTx(457200,1600000,11000000,400000,ev.startDate+(ev.startTime?' '+ev.startTime+(ev.endTime?'~'+ev.endTime:''):'')+' | '+MOD[ev.module].label+' | '+(cnt(ev)||'')+' 명',{sz:1600,clr:'CCDDEE',id:4});
+  var ev=curEv;if(!ev)return;
+  toast('PPT 생성 중...');
+  loadPptxLib(function(){
+    try{_buildPPTX(ev)}catch(e){toast('PPT 생성 오류: '+e.message);console.error(e)}
+  });
+}
+function _buildPPTX(ev){
+  var pres=new PptxGenJS();
+  pres.layout='LAYOUT_16x9';
+  pres.author=me?me.name:'의전팀';
+  pres.title=ev.title+' 의전 보고서';
+  var m=MOD[ev.module],rc=reportConfig;
+  var hc1='#'+rc.headerColor1,hc2='#'+rc.headerColor2;
+  // === Slide 1: Title ===
+  var s1=pres.addSlide();
+  s1.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:'100%',h:2.0,fill:{color:rc.headerColor1}});
+  s1.addText(rc.companyName+' 의전 보고서',{x:0.5,y:0.3,w:9,h:0.4,fontSize:14,color:'CCDDEE',fontFace:'Malgun Gothic'});
+  s1.addText(ev.title,{x:0.5,y:0.7,w:9,h:0.8,fontSize:32,bold:true,color:'FFFFFF',fontFace:'Malgun Gothic'});
+  var subInfo=ev.startDate+(ev.startTime?' '+ev.startTime+(ev.endTime?'~'+ev.endTime:''):'')+' | '+m.label+(cnt(ev)?' | '+cnt(ev)+'명':'');
+  s1.addText(subInfo,{x:0.5,y:1.5,w:9,h:0.35,fontSize:14,color:'CCDDEE',fontFace:'Malgun Gothic'});
   // Fields
-  var fields=fieldConfig[ev.module]||[],fy=2500000,fid=10;
+  var fields=fieldConfig[ev.module]||[],fy=2.3;
   fields.forEach(function(f){
     var dv=ev[f.key];if(f.type==='select'&&f.opts){var opt=f.opts.find(function(o){return o.v===dv});dv=opt?opt.l:dv}
     if(typeof dv==='number'&&f.type==='number'&&f.unit)dv=dv+f.unit;
     if(!dv&&dv!==0)return;
-    s1+=pptxTx(457200,fy,3000000,350000,f.label,{sz:1200,clr:'94A3B8',id:fid++});
-    s1+=pptxTx(3600000,fy,8000000,350000,String(dv).replace(/\n/g,' ').substring(0,60),{sz:1400,clr:'1E293B',b:true,id:fid++});
-    fy+=380000;
+    s1.addText(f.label,{x:0.5,y:fy,w:2.2,h:0.35,fontSize:11,color:'94A3B8',fontFace:'Malgun Gothic'});
+    s1.addText(String(dv).replace(/\n/g,' ').substring(0,80),{x:2.8,y:fy,w:6.7,h:0.35,fontSize:13,bold:true,color:'1E293B',fontFace:'Malgun Gothic'});
+    fy+=0.38;
   });
-  s1+=pptxTx(457200,SH-500000,11000000,300000,'작성일: '+td()+' | 작성자: '+me.name,{sz:1000,clr:'94A3B8',id:90,align:'r'});
-  s1+='</p:spTree></p:cSld></p:sld>';
-
-  // Slide 2: Timeline or details
-  var s2='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld '+ns+'><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
-  s2+=pptxRect(0,0,SW,900000,rc.headerColor1,101);
-  s2+=pptxTx(457200,200000,11000000,500000,(ev.module==='vip_visit'?'세부 타임라인':'상세 정보'),{sz:2800,b:true,clr:'FFFFFF',id:2});
-  var tid=10;
-  if(ev.module==='vip_visit'&&ev.timeline&&ev.timeline.length){
-    var ty=1100000;
-    ev.timeline.forEach(function(t){
-      if(ty>SH-600000)return;
-      s2+=pptxTx(457200,ty,2200000,320000,t.time+(t.endTime?'~'+t.endTime:''),{sz:1400,b:true,clr:'2563EB',id:tid++});
-      s2+=pptxTx(2800000,ty,4000000,320000,t.place,{sz:1600,b:true,clr:'1E293B',id:tid++});
-      s2+=pptxTx(7000000,ty,4500000,320000,(t.contact||'')+' '+(t.contactPhone||''),{sz:1200,clr:'64748B',id:tid++});
-      ty+=400000;
+  if(ev.memo){
+    s1.addText('메모',{x:0.5,y:fy+0.1,w:2.2,h:0.35,fontSize:11,color:'94A3B8',fontFace:'Malgun Gothic'});
+    s1.addText(ev.memo.substring(0,200),{x:2.8,y:fy+0.1,w:6.7,h:0.7,fontSize:11,color:'475569',fontFace:'Malgun Gothic',valign:'top'});
+  }
+  s1.addText('작성일: '+td()+' | 작성자: '+(me?me.name:''),{x:0.5,y:5.1,w:9,h:0.3,fontSize:9,color:'94A3B8',align:'right',fontFace:'Malgun Gothic'});
+  // === Slide 2: Timeline or Details ===
+  var s2=pres.addSlide();
+  s2.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:'100%',h:0.9,fill:{color:rc.headerColor1}});
+  var s2Title=ev.module==='vip_visit'&&ev.timeline&&ev.timeline.length?'세부 타임라인':'상세 정보';
+  s2.addText(s2Title,{x:0.5,y:0.2,w:9,h:0.5,fontSize:24,bold:true,color:'FFFFFF',fontFace:'Malgun Gothic'});
+  if(ev.timeline&&ev.timeline.length){
+    var tRows=[[{text:'시간',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}},{text:'장소',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}},{text:'담당자',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}},{text:'지원사항',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}}]];
+    ev.timeline.forEach(function(t,i){
+      var bgClr=i%2?'F8FAFC':'FFFFFF';
+      tRows.push([
+        {text:t.time+(t.endTime?'~'+t.endTime:''),options:{bold:true,color:'2563EB',fill:{color:bgClr}}},
+        {text:t.place||'',options:{bold:true,color:'1E293B',fill:{color:bgClr}}},
+        {text:(t.contact||'')+(t.contactPhone?'\n'+t.contactPhone:''),options:{color:'475569',fill:{color:bgClr}}},
+        {text:t.support||'',options:{color:'64748B',fill:{color:bgClr}}}
+      ]);
     });
-  }else if(ev.memo){s2+=pptxTx(457200,1100000,11000000,4000000,ev.memo,{sz:1600,clr:'334155',id:tid++})}
-  s2+=pptxTx(457200,SH-500000,11000000,300000,rc.companyName+' 의전 마스터',{sz:1000,clr:'94A3B8',id:91,align:'r'});
-  s2+='</p:spTree></p:cSld></p:sld>';
-
-  // OOXML package files
-  var ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.theme+xml"/></Types>';
-  var rootRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>';
-  var presXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:presentation '+ns+' saveSubsetFonts="1"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId4"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/><p:sldId id="257" r:id="rId3"/></p:sldIdLst><p:sldSz cx="'+SW+'" cy="'+SH+'"/><p:notesSz cx="'+SH+'" cy="'+SW+'"/></p:presentation>';
-  var presRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/></Relationships>';
-  var slideRel='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>';
-  var smXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>';
-  var smRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/></Relationships>';
-  var slXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank"><p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld></p:sldLayout>';
-  var slRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>';
-  var themeXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Theme1"><a:themeElements><a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1E3A5F"/></a:dk2><a:lt2><a:srgbClr val="E2E8F0"/></a:lt2><a:accent1><a:srgbClr val="2563EB"/></a:accent1><a:accent2><a:srgbClr val="D97706"/></a:accent2><a:accent3><a:srgbClr val="7C3AED"/></a:accent3><a:accent4><a:srgbClr val="059669"/></a:accent4><a:accent5><a:srgbClr val="DC2626"/></a:accent5><a:accent6><a:srgbClr val="6366F1"/></a:accent6><a:hlink><a:srgbClr val="2563EB"/></a:hlink><a:folHlink><a:srgbClr val="7C3AED"/></a:folHlink></a:clrScheme><a:fontScheme name="Office"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface="Calibri"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>';
-  var blob=buildZip([
-    {name:'[Content_Types].xml',content:ct},
-    {name:'_rels/.rels',content:rootRels},
-    {name:'ppt/presentation.xml',content:presXml},
-    {name:'ppt/_rels/presentation.xml.rels',content:presRels},
-    {name:'ppt/slides/slide1.xml',content:s1},
-    {name:'ppt/slides/slide2.xml',content:s2},
-    {name:'ppt/slides/_rels/slide1.xml.rels',content:slideRel},
-    {name:'ppt/slides/_rels/slide2.xml.rels',content:slideRel},
-    {name:'ppt/slideMasters/slideMaster1.xml',content:smXml},
-    {name:'ppt/slideMasters/_rels/slideMaster1.xml.rels',content:smRels},
-    {name:'ppt/slideLayouts/slideLayout1.xml',content:slXml},
-    {name:'ppt/slideLayouts/_rels/slideLayout1.xml.rels',content:slRels},
-    {name:'ppt/theme/theme1.xml',content:themeXml}
-  ]);
-  var link=document.createElement('a');
-  link.download='보고서_'+ev.title.replace(/\s+/g,'_')+'.pptx';
-  link.href=URL.createObjectURL(blob);link.click();
-  toast('PPT가 저장되었습니다.');
+    s2.addTable(tRows,{x:0.3,y:1.1,w:9.4,fontSize:11,fontFace:'Malgun Gothic',border:{type:'solid',pt:0.5,color:'E2E8F0'},colW:[1.8,2.8,2.4,2.4]});
+  }else if(ev.memo){
+    s2.addText(ev.memo,{x:0.5,y:1.1,w:9,h:3.5,fontSize:14,color:'334155',fontFace:'Malgun Gothic',valign:'top'});
+  }
+  s2.addText(rc.companyName+' 의전 마스터',{x:0.5,y:5.1,w:9,h:0.3,fontSize:9,color:'94A3B8',align:'right',fontFace:'Malgun Gothic'});
+  // === Slide 3: Checklist (if exists) ===
+  if(ev.checklist&&ev.checklist.length){
+    var s3=pres.addSlide();
+    s3.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:'100%',h:0.9,fill:{color:rc.headerColor1}});
+    s3.addText('체크리스트',{x:0.5,y:0.2,w:9,h:0.5,fontSize:24,bold:true,color:'FFFFFF',fontFace:'Malgun Gothic'});
+    var clRows=[[{text:'항목',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}},{text:'담당자',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}},{text:'상태',options:{bold:true,color:'FFFFFF',fill:{color:rc.headerColor1}}}]];
+    ev.checklist.forEach(function(cl,i){
+      var bgClr=i%2?'F8FAFC':'FFFFFF';
+      clRows.push([
+        {text:cl.task||'',options:{color:'1E293B',fill:{color:bgClr}}},
+        {text:cl.assignee||'미지정',options:{color:'475569',fill:{color:bgClr}}},
+        {text:cl.done?'완료':'미완료',options:{bold:true,color:cl.done?'059669':'DC2626',fill:{color:bgClr}}}
+      ]);
+    });
+    s3.addTable(clRows,{x:0.3,y:1.1,w:9.4,fontSize:12,fontFace:'Malgun Gothic',border:{type:'solid',pt:0.5,color:'E2E8F0'},colW:[5.0,2.2,2.2]});
+    s3.addText(rc.companyName+' 의전 마스터',{x:0.5,y:5.1,w:9,h:0.3,fontSize:9,color:'94A3B8',align:'right',fontFace:'Malgun Gothic'});
+  }
+  // Generate and download
+  pres.writeFile({fileName:'보고서_'+ev.title.replace(/\s+/g,'_')+'.pptx'}).then(function(){
+    toast('PPT가 저장되었습니다.');
+  }).catch(function(e){toast('PPT 저장 오류: '+e.message)});
 }
 
 // ═══════════════════════════════════════
@@ -2353,55 +2523,64 @@ function testEmailJS(){
 }
 
 // ── Smart Sending: decides best method based on environment ──
-function smartSendEmail(emails,subject,body,senderName,senderEmail){
+function smartSendEmail(emails,subject,body,senderName,senderEmail,htmlBody){
   loadSettings();
   var mode=appSettings.envMode||'corporate';
   var method=mode==='corporate'?'mailto':appSettings.emailMethod;
-  // Always copy to clipboard as backup
+  // Always copy to clipboard as backup (include HTML as well if available)
   var clipText='수신: '+emails.join(', ')+'\n제목: '+subject+'\n\n'+body;
+  if(htmlBody){clipText+='\n\n[HTML 버전]\n'+htmlBody}
   try{navigator.clipboard.writeText(clipText)}catch(e){}
   if(method==='emailjs'&&appSettings.emailjsService){
     return fetch('https://api.emailjs.com/api/v1.0/email/send',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({service_id:appSettings.emailjsService,template_id:appSettings.emailjsTemplate,user_id:appSettings.emailjsKey,
-        template_params:{to_email:emails.join(','),subject:subject,message:body,from_name:senderName}})
+        template_params:{to_email:emails.join(','),subject:subject,message:body,message_html:htmlBody||body,from_name:senderName}})
     }).then(function(r){
       if(!r.ok)throw new Error('EmailJS 오류: '+r.status);
       return{ok:true,method:'api',msg:'✅ 이메일이 자동 발송되었습니다! ('+emails.length+'명)'};
     }).catch(function(err){
       // API 실패 시 mailto로 폴백
-      openMailto(emails,subject,body,senderName);
+      openMailto(emails,subject,body,senderName,htmlBody);
       return{ok:true,method:'fallback',msg:'⚠️ API 실패 → 메일앱으로 전환됨 (클립보드 복사됨)'};
     });
   }else if(method==='webhook'&&appSettings.emailWebhook){
     var hdrs={'Content-Type':'application/json'};
     if(appSettings.emailApiKey)hdrs['Authorization']='Bearer '+appSettings.emailApiKey;
     return fetch(appSettings.emailWebhook,{method:'POST',headers:hdrs,
-      body:JSON.stringify({to:emails,subject:subject,body:body,from_name:senderName,from_email:senderEmail||appSettings.smtpFrom})
+      body:JSON.stringify({to:emails,subject:subject,body:body,html_body:htmlBody,from_name:senderName,from_email:senderEmail||appSettings.smtpFrom})
     }).then(function(r){
       if(!r.ok)throw new Error('Webhook 오류: '+r.status);
       return{ok:true,method:'api',msg:'✅ 이메일이 자동 발송되었습니다! ('+emails.length+'명)'};
     }).catch(function(err){
-      openMailto(emails,subject,body,senderName);
+      openMailto(emails,subject,body,senderName,htmlBody);
       return{ok:true,method:'fallback',msg:'⚠️ API 실패 → 메일앱으로 전환됨 (클립보드 복사됨)'};
     });
   }else{
     // Default: mailto (corporate mode or no API configured)
-    openMailto(emails,subject,body,senderName);
+    openMailto(emails,subject,body,senderName,htmlBody);
     var isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
     return Promise.resolve({ok:true,method:'mailto',msg:isMobile?'📧 메일앱이 열렸습니다':'📧 Outlook이 열렸습니다. 보내기를 클릭하세요 (내용 클립보드 복사됨)'});
   }
 }
-function openMailto(emails,subject,body,senderName){
+function openMailto(emails,subject,body,senderName,htmlBody){
   var sig=appSettings.corpSignature?'\n\n---\n'+appSettings.corpSignature:'\n\n---\n'+(senderName||'')+' | '+reportConfig.companyName+' 의전팀';
-  var mailUrl='mailto:'+emails.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+sig);
+  var bodyWithSig=body+sig;
+  var mailUrl='mailto:'+emails.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyWithSig);
+  // If HTML body is available, include it in clipboard for pasting
+  if(htmlBody){
+    var htmlSig='<div style="border-top:1px solid #E2E8F0;padding-top:12px;font-size:12px;color:#64748B;margin-top:16px;font-family:Segoe UI,sans-serif">'+(appSettings.corpSignature?appSettings.corpSignature.replace(/\n/g,'<br>'):senderName+' | '+reportConfig.companyName+' 의전팀')+'</div>';
+    var htmlWithSig=htmlBody.replace('</body></html>',''+htmlSig+'</body></html>');
+    var clipHtml='[HTML 이메일 내용]<br><br>'+htmlWithSig;
+    try{navigator.clipboard.writeText(clipHtml)}catch(e){}
+  }
   // mailto URL length limit ~2000 chars; if too long, use multiple or just clipboard
   if(mailUrl.length>1900){
     // Split into batches of ~5 recipients
     var batch=5,i=0;
     while(i<emails.length){
       var chunk=emails.slice(i,i+batch);
-      var batchUrl='mailto:'+chunk.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+sig);
+      var batchUrl='mailto:'+chunk.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyWithSig);
       try{window.open(batchUrl,'_blank')}catch(e){}
       i+=batch;
     }
