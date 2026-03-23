@@ -917,7 +917,7 @@ var _sampleEvents=[
 
 var auditLogs=[];
 
-var users=[{"id": 1, "loginId": "admin", "name": "관리자", "dept": "행정섭외그룹", "pos": "그룹장", "role": "admin", "status": "active", "pwHash": "", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}, {"id": 2, "loginId": "park.jy", "name": "박지영", "dept": "행정섭외그룹", "pos": "대리", "role": "user", "status": "active", "pwHash": "", "perms": {"vip_visit": "readwrite", "dining": "readwrite", "lodging": "readwrite", "golf": "readwrite"}}];
+var users=[];
 // Password hashing (SHA-256 based simple hash for client-side)
 function hashPw(pw){
   var hash=0,i,chr;pw=pw+'_pm_salt_2026';
@@ -1041,7 +1041,30 @@ function _autoRepoSync(){
     });
   },2000);
 }
-// Load latest data from repo on startup
+// Load latest data from repo on startup (3-tier fallback: repo \u2192 localStorage \u2192 _sampleEvents)
+function _applyFallbackData(source){
+  try{
+    var ev=localStorage.getItem('pm_events');
+    if(ev){var p=JSON.parse(ev);if(p&&p.length>0){events=p;console.log('Fallback('+source+'): loaded '+events.length+' events from localStorage');return true}}
+  }catch(e){}
+  if(typeof _sampleEvents!=='undefined'&&_sampleEvents.length>0){
+    events=JSON.parse(JSON.stringify(_sampleEvents));
+    console.log('Fallback('+source+'): loaded '+events.length+' events from _sampleEvents');
+    return true;
+  }
+  return false;
+}
+function _applyFallbackUsers(source){
+  try{
+    var us=localStorage.getItem('pm_users');
+    if(us){var p=JSON.parse(us);if(p&&p.length>0){users=p;return true}}
+  }catch(e){}
+  if(typeof _sampleUsers!=='undefined'&&_sampleUsers.length>0){
+    users=JSON.parse(JSON.stringify(_sampleUsers));
+    return true;
+  }
+  return false;
+}
 function loadFromGist(){
   return fetch(_REPO_API,{
     headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
@@ -1056,8 +1079,17 @@ function loadFromGist(){
     var jsonStr=new TextDecoder('utf-8').decode(bytes);
     var pkg=JSON.parse(jsonStr);
     if(!pkg||!pkg.data)throw new Error('invalid data');
-    if(pkg.data.events&&pkg.data.events.length>0)events=pkg.data.events;
-    if(pkg.data.users&&pkg.data.users.length>0)users=pkg.data.users;
+    if(pkg.data.events&&pkg.data.events.length>0){
+      events=pkg.data.events;
+    }else{
+      console.warn('Repo has 0 events, trying fallback...');
+      _applyFallbackData('repo-empty');
+    }
+    if(pkg.data.users&&pkg.data.users.length>0){
+      users=pkg.data.users;
+    }else{
+      _applyFallbackUsers('repo-empty');
+    }
     if(pkg.data.auditLogs)auditLogs=pkg.data.auditLogs;
     if(pkg.data.reportConfig){
       Object.keys(pkg.data.reportConfig).forEach(function(k){reportConfig[k]=pkg.data.reportConfig[k]});
@@ -1077,14 +1109,25 @@ function loadFromGist(){
       localStorage.setItem('pm_reqHistory',JSON.stringify(reqHistory));
     }catch(e){}
     _repoDataLoaded=true;
-    console.log('Repo data loaded: '+pkg.meta.eventCount+' events, '+pkg.meta.userCount+' users');
+    console.log('Data ready: '+events.length+' events, '+users.length+' users (source: repo+fallback)');
+    if(pkg.data.events&&pkg.data.events.length===0&&events.length>0){
+      console.log('Syncing recovered data back to repo...');
+      _autoRepoSync();
+    }
     return true;
   }).catch(function(e){
     console.warn('Repo load failed:',e);
+    _applyFallbackData('repo-fail');
+    _applyFallbackUsers('repo-fail');
+    try{
+      var au=localStorage.getItem('pm_audit');if(au)auditLogs=JSON.parse(au);
+      var rc=localStorage.getItem('pm_reportConfig');if(rc){var rco=JSON.parse(rc);Object.keys(rco).forEach(function(k){reportConfig[k]=rco[k]})}
+    }catch(ex){}
     _repoDataLoaded=true;
     return false;
   });
 }
+
 
 // Core save function - call after ANY data mutation
 function save(collection){
@@ -1518,7 +1561,15 @@ function _completeLogin(u){
       loadFromLocal();initCal();
     });
   }else{
-    // Already loaded from GitHub repo in doLogin, just refresh user ref
+    // Already loaded from GitHub repo in doLogin
+    // Final safety: if events is still empty after all loading, use fallbacks
+    if(events.length===0){
+      console.warn('Events still empty after repo load, applying final fallback...');
+      _applyFallbackData('completeLogin');
+    }
+    if(users.length===0){
+      _applyFallbackUsers('completeLogin');
+    }
     var repoUser=users.find(function(x){return x.loginId===me.loginId});
     if(repoUser)me=repoUser;
     initCal();
@@ -2529,7 +2580,7 @@ var defaultFeatureTracker=[
   {id:21,cat:'기타',name:'입력항목 커스터마이징',status:'done',method:'관리자 페이지',date:'2026-03-20',note:'모듈별 필드 추가/삭제'},
   {id:22,cat:'기타',name:'사용자 메모 공간',status:'done',method:'메인 화면 메모 패널',date:'2026-03-22',note:'개인 메모 작성/저장'},
   {id:23,cat:'배포',name:'크로스 디바이스 데이터 동기화',status:'done',method:'GitHub Repo data.json',date:'2026-03-23',note:'로그인시 서버 로드, 저장시 자동 업로드 (2초 디바운스)'},
-  {id:24,cat:'배포',name:'배포시 데이터 보호',status:'done',method:'_repoDataLoaded 플래그+빈데이터 체크',date:'2026-03-23',note:'로드 전 sync 차단, 빈 데이터로 repo 덮어쓰기 방지'}
+  {id:24,cat:'배포',name:'데이터 소실 원천 방지',status:'done',method:'3단계 폴백(repo\u2192localStorage\u2192sampleData)+sync가드',date:'2026-03-23',note:'loadFromGist 폴백체인, _autoRepoSync 이중가드, _completeLogin 최종안전장치'}
 ];
 var featureTracker=(function(){try{var s=localStorage.getItem('pm_featureTracker');if(s){var d=JSON.parse(s);if(d&&d.length)return d}}catch(e){}return JSON.parse(JSON.stringify(defaultFeatureTracker))})();
 function saveFeatureTracker(){try{localStorage.setItem('pm_featureTracker',JSON.stringify(featureTracker))}catch(e){}}
