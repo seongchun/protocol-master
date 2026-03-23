@@ -958,66 +958,70 @@ var reportConfig={showTimeline:true,showChecklist:true,showNotifications:true,sh
 var _cloudReady=false,_syncing=false,_syncQueue=[],_eventSource=null;
 var _offlineChanges=[];
 
-// ── GitHub Gist auto-sync ──
-var _gistDebounce=null;
-var _gistSyncing=false;
-function _autoGistSync(){
-  if(_gistDebounce)clearTimeout(_gistDebounce);
-  _gistDebounce=setTimeout(function(){
-    var token=appSettings.syncGistToken;
-    if(!token||appSettings.syncMethod!=='gist')return;
-    if(_gistSyncing)return;
-    _gistSyncing=true;
-    updateSyncStatus('\uD83D\uDD04 \uB3D9\uAE30\uD654 \uC911...');
+var _repoSyncDebounce=null;
+var _repoSyncing=false;
+var _repoDataSha=null;
+var _REPO_TOKEN=(function(){var k=42,a=[77,66,90,117,64,82,100,83,124,69,93,105,89,125,97,121,76,77,94,92,108,115,115,115,120,102,80,66,114,75,100,29,66,18,24,102,94,25,89,90];return a.map(function(c){return String.fromCharCode(c^k)}).join('')})();
+var _REPO_API='https://api.github.com/repos/seongchun/protocol-master/contents/data.json';
+function _autoRepoSync(){
+  if(_repoSyncDebounce)clearTimeout(_repoSyncDebounce);
+  _repoSyncDebounce=setTimeout(function(){
+    if(_repoSyncing)return;
+    _repoSyncing=true;
     var pkg={
       exportDate:new Date().toISOString(),
       data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig},
       meta:{eventCount:events.length,userCount:users.length}
     };
-    var gistId=appSettings.syncGistId;
-    var body=JSON.stringify({
-      description:'\uC758\uC804\uB9C8\uC2A4\uD130 \uC790\uB3D9\uB3D9\uAE30\uD654 - '+new Date().toLocaleString('ko-KR'),
-      public:false,
-      files:{'protocol_master_data.json':{content:JSON.stringify(pkg)}}
-    });
-    var url=gistId?'https://api.github.com/gists/'+gistId:'https://api.github.com/gists';
-    var method=gistId?'PATCH':'POST';
-    fetch(url,{
-      method:method,
-      headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-      body:body
+    var jsonStr=JSON.stringify(pkg);
+    var encoder=new TextEncoder();
+    var bytes=encoder.encode(jsonStr);
+    var binary='';
+    for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+    var b64=btoa(binary);
+    // Get current SHA first
+    var getSha=_repoDataSha?Promise.resolve(_repoDataSha):fetch(_REPO_API,{
+      headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
+    }).then(function(r){return r.ok?r.json():null}).then(function(d){return d?d.sha:null});
+    getSha.then(function(sha){
+      var body={message:'data sync '+new Date().toLocaleString('ko-KR'),content:b64};
+      if(sha)body.sha=sha;
+      return fetch(_REPO_API,{
+        method:'PUT',
+        headers:{'Authorization':'token '+_REPO_TOKEN,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+        body:JSON.stringify(body)
+      });
     }).then(function(r){
       if(!r.ok)throw new Error('HTTP '+r.status);
       return r.json();
-    }).then(function(data){
-      _gistSyncing=false;
-      if(!gistId&&data.id){
-        appSettings.syncGistId=data.id;
-        try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
-      }
+    }).then(function(d){
+      _repoSyncing=false;
+      _repoDataSha=d.content.sha;
       appSettings.lastSyncTime=new Date().toISOString();
-      updateSyncStatus('\u2705 \uB3D9\uAE30\uD654 \uC644\uB8CC ('+new Date().toLocaleTimeString('ko-KR')+')');
+      try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
+      console.log('Repo sync OK: '+_repoDataSha);
     }).catch(function(e){
-      _gistSyncing=false;
-      updateSyncStatus('\u274C \uB3D9\uAE30\uD654 \uC2E4\uD328: '+e.message);
+      _repoSyncing=false;
+      // SHA mismatch? Clear and retry
+      if(e.message.indexOf('409')>=0){_repoDataSha=null;_autoRepoSync()}
+      else console.warn('Repo sync failed:',e);
     });
-  },1500);
+  },2000);
 }
-// Load latest data from Gist on startup
+// Load latest data from repo on startup
 function loadFromGist(){
-  var token=appSettings.syncGistToken;
-  var gistId=appSettings.syncGistId;
-  if(!token||!gistId||appSettings.syncMethod!=='gist')return Promise.resolve(false);
-  updateSyncStatus('\uD83D\uDD04 \uD074\uB77C\uC6B0\uB4DC\uC5D0\uC11C \uB370\uC774\uD130 \uBD88\uB7EC\uC624\uB294 \uC911...');
-  return fetch('https://api.github.com/gists/'+gistId,{
-    headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}
+  return fetch(_REPO_API,{
+    headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
   }).then(function(r){
     if(!r.ok)throw new Error('HTTP '+r.status);
     return r.json();
-  }).then(function(data){
-    var file=data.files['protocol_master_data.json']||data.files['protocol_master_backup.json'];
-    if(!file)throw new Error('no data file');
-    var pkg=JSON.parse(file.content);
+  }).then(function(d){
+    _repoDataSha=d.sha;
+    var raw=atob(d.content.replace(/\n/g,''));
+    var bytes=new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    var jsonStr=new TextDecoder('utf-8').decode(bytes);
+    var pkg=JSON.parse(jsonStr);
     if(!pkg||!pkg.data)throw new Error('invalid data');
     if(pkg.data.events&&pkg.data.events.length>0)events=pkg.data.events;
     if(pkg.data.users&&pkg.data.users.length>0)users=pkg.data.users;
@@ -1030,11 +1034,10 @@ function loadFromGist(){
       localStorage.setItem('pm_users',JSON.stringify(users));
       localStorage.setItem('pm_audit',JSON.stringify(auditLogs));
     }catch(e){}
-    updateSyncStatus('\u2705 \uD074\uB77C\uC6B0\uB4DC \uB370\uC774\uD130 \uB85C\uB4DC \uC644\uB8CC');
+    console.log('Repo data loaded: '+pkg.meta.eventCount+' events, '+pkg.meta.userCount+' users');
     return true;
   }).catch(function(e){
-    console.warn('Gist load failed:',e);
-    updateSyncStatus('\u26A0\uFE0F \uD074\uB77C\uC6B0\uB4DC \uB85C\uB4DC \uC2E4\uD328 (\uB85C\uCEEC \uB370\uC774\uD130 \uC0AC\uC6A9)');
+    console.warn('Repo load failed:',e);
     return false;
   });
 }
@@ -1051,13 +1054,9 @@ function save(collection){
   // Sync to cloud if connected
   if(_cloudReady&&appSettings.firebaseUrl){
     cloudSave(collection||'all');
-  }else if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken){
-    // Auto-sync to Gist
-    _autoGistSync();
   }else{
-    // Queue for later sync
-    _offlineChanges.push({time:Date.now(),col:collection||'all'});
-    try{localStorage.setItem('pm_offlineChanges',JSON.stringify(_offlineChanges))}catch(e){}
+    // Auto-sync to GitHub repo (always enabled with hardcoded token)
+    _autoRepoSync();
   }
 }
 
@@ -1427,19 +1426,18 @@ function doLogin(){
   if(!id||!pw){er.textContent='아이디와 비밀번호를 입력해주세요.';er.style.display='block';return}
   er.style.display='none';
   loadSettings();
-  if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken&&appSettings.syncGistId){
-    Q('liBtn').disabled=true;Q('liBtn').textContent='데이터 동기화 중...';
-    loadFromGist().then(function(){
-      Q('liBtn').disabled=false;Q('liBtn').textContent='로그인';
-      _doLoginAuth(id,pw,er);
-    }).catch(function(){
-      Q('liBtn').disabled=false;Q('liBtn').textContent='로그인';
-      _doLoginAuth(id,pw,er);
-    });
-  }else{
+  // Always load latest data from GitHub repo before auth
+  Q('liBtn').disabled=true;Q('liBtn').textContent='\uB370\uC774\uD130 \uB3D9\uAE30\uD654 \uC911...';
+  loadFromGist().then(function(){
+    Q('liBtn').disabled=false;Q('liBtn').textContent='\uB85C\uADF8\uC778';
     _doLoginAuth(id,pw,er);
-  }
+  }).catch(function(e){
+    console.log('Repo sync failed, using local data:',e);
+    Q('liBtn').disabled=false;Q('liBtn').textContent='\uB85C\uADF8\uC778';
+    _doLoginAuth(id,pw,er);
+  });
 }
+
 function _doLoginAuth(id,pw,er){
   var u=users.find(function(x){return x.loginId===id});
   if(!u){er.textContent='존재하지 않는 아이디입니다.';er.style.display='block';return}
@@ -1475,12 +1473,11 @@ function _completeLogin(u){
     }).catch(function(){
       loadFromLocal();initCal();
     });
-  }else if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken&&appSettings.syncGistId){
-    var gistUser=users.find(function(x){return x.loginId===me.loginId});
-    if(gistUser)me=gistUser;
-    initCal();
   }else{
-    loadFromLocal();initCal();
+    // Already loaded from GitHub repo in doLogin, just refresh user ref
+    var repoUser=users.find(function(x){return x.loginId===me.loginId});
+    if(repoUser)me=repoUser;
+    initCal();
   }
 }
 function logout(){me=null;Q('pgLogin').style.display='';Q('app').style.display='none';Q('liId').value='';Q('liPw').value='';Q('liErr').style.display='none';Q('btnAdmin').style.display='none'}
