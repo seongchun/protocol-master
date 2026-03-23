@@ -961,50 +961,83 @@ var _offlineChanges=[];
 var _repoSyncDebounce=null;
 var _repoSyncing=false;
 var _repoDataSha=null;
+var _repoDataLoaded=false;
 var _REPO_TOKEN=(function(){var k=42,a=[77,66,90,117,64,82,100,83,124,69,93,105,89,125,97,121,76,77,94,92,108,115,115,115,120,102,80,66,114,75,100,29,66,18,24,102,94,25,89,90];return a.map(function(c){return String.fromCharCode(c^k)}).join('')})();
 var _REPO_API='https://api.github.com/repos/seongchun/protocol-master/contents/data.json';
 function _autoRepoSync(){
   if(_repoSyncDebounce)clearTimeout(_repoSyncDebounce);
   _repoSyncDebounce=setTimeout(function(){
     if(_repoSyncing)return;
+    if(!_repoDataLoaded){console.log('Repo sync skipped: data not loaded from repo yet');return;}
     _repoSyncing=true;
-    var pkg={
-      exportDate:new Date().toISOString(),
-      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig,reqHistory:reqHistory,featureTracker:featureTracker},
-      meta:{eventCount:events.length,userCount:users.length}
-    };
-    var jsonStr=JSON.stringify(pkg);
-    var encoder=new TextEncoder();
-    var bytes=encoder.encode(jsonStr);
-    var binary='';
-    for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
-    var b64=btoa(binary);
-    // Get current SHA first
-    var getSha=_repoDataSha?Promise.resolve(_repoDataSha):fetch(_REPO_API,{
-      headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
-    }).then(function(r){return r.ok?r.json():null}).then(function(d){return d?d.sha:null});
-    getSha.then(function(sha){
-      var body={message:'data sync '+new Date().toLocaleString('ko-KR'),content:b64};
-      if(sha)body.sha=sha;
-      return fetch(_REPO_API,{
-        method:'PUT',
-        headers:{'Authorization':'token '+_REPO_TOKEN,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-        body:JSON.stringify(body)
+    var preCheck=Promise.resolve(true);
+    if(events.length===0){
+      preCheck=fetch(_REPO_API,{
+        headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
+      }).then(function(r){return r.ok?r.json():null}).then(function(d){
+        if(!d)return true;
+        _repoDataSha=d.sha;
+        try{
+          var raw=atob(d.content.replace(/\n/g,''));
+          var bytes=new Uint8Array(raw.length);
+          for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+          var jsonStr=new TextDecoder('utf-8').decode(bytes);
+          var pkg=JSON.parse(jsonStr);
+          if(pkg&&pkg.data&&pkg.data.events&&pkg.data.events.length>0){
+            console.warn('Repo sync blocked: local events=0 but repo has '+pkg.data.events.length+' events. Loading repo data instead.');
+            if(pkg.data.events)events=pkg.data.events;
+            if(pkg.data.users&&pkg.data.users.length>0)users=pkg.data.users;
+            if(pkg.data.auditLogs)auditLogs=pkg.data.auditLogs;
+            if(pkg.data.reqHistory&&pkg.data.reqHistory.length>0)reqHistory=pkg.data.reqHistory;
+            if(pkg.data.featureTracker&&pkg.data.featureTracker.length>0)featureTracker=pkg.data.featureTracker;
+            try{
+              localStorage.setItem('pm_events',JSON.stringify(events));
+              localStorage.setItem('pm_users',JSON.stringify(users));
+            }catch(e){}
+            return false;
+          }
+        }catch(e){}
+        return true;
+      }).catch(function(){return true;});
+    }
+    preCheck.then(function(shouldSync){
+      if(!shouldSync){_repoSyncing=false;return;}
+      var pkg={
+        exportDate:new Date().toISOString(),
+        data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig,reqHistory:reqHistory,featureTracker:featureTracker},
+        meta:{eventCount:events.length,userCount:users.length}
+      };
+      var jsonStr=JSON.stringify(pkg);
+      var encoder=new TextEncoder();
+      var bytes=encoder.encode(jsonStr);
+      var binary='';
+      for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+      var b64=btoa(binary);
+      var getSha=_repoDataSha?Promise.resolve(_repoDataSha):fetch(_REPO_API,{
+        headers:{'Authorization':'token '+_REPO_TOKEN,'Accept':'application/vnd.github.v3+json'}
+      }).then(function(r){return r.ok?r.json():null}).then(function(d){return d?d.sha:null});
+      getSha.then(function(sha){
+        var body={message:'data sync '+new Date().toLocaleString('ko-KR'),content:b64};
+        if(sha)body.sha=sha;
+        return fetch(_REPO_API,{
+          method:'PUT',
+          headers:{'Authorization':'token '+_REPO_TOKEN,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+          body:JSON.stringify(body)
+        });
+      }).then(function(r){
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        return r.json();
+      }).then(function(d){
+        _repoSyncing=false;
+        _repoDataSha=d.content.sha;
+        appSettings.lastSyncTime=new Date().toISOString();
+        try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
+        console.log('Repo sync OK: '+_repoDataSha);
+      }).catch(function(e){
+        _repoSyncing=false;
+        if(e.message.indexOf('409')>=0){_repoDataSha=null;_autoRepoSync();}
+        else console.warn('Repo sync failed:',e);
       });
-    }).then(function(r){
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      return r.json();
-    }).then(function(d){
-      _repoSyncing=false;
-      _repoDataSha=d.content.sha;
-      appSettings.lastSyncTime=new Date().toISOString();
-      try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
-      console.log('Repo sync OK: '+_repoDataSha);
-    }).catch(function(e){
-      _repoSyncing=false;
-      // SHA mismatch? Clear and retry
-      if(e.message.indexOf('409')>=0){_repoDataSha=null;_autoRepoSync()}
-      else console.warn('Repo sync failed:',e);
     });
   },2000);
 }
@@ -1043,10 +1076,12 @@ function loadFromGist(){
       localStorage.setItem('pm_audit',JSON.stringify(auditLogs));
       localStorage.setItem('pm_reqHistory',JSON.stringify(reqHistory));
     }catch(e){}
+    _repoDataLoaded=true;
     console.log('Repo data loaded: '+pkg.meta.eventCount+' events, '+pkg.meta.userCount+' users');
     return true;
   }).catch(function(e){
     console.warn('Repo load failed:',e);
+    _repoDataLoaded=true;
     return false;
   });
 }
@@ -2493,7 +2528,8 @@ var defaultFeatureTracker=[
   {id:20,cat:'기타',name:'다중 일자 일정 표시',status:'done',method:'캘린더 UI',date:'2026-03-20',note:'시작~종료일 바 형태'},
   {id:21,cat:'기타',name:'입력항목 커스터마이징',status:'done',method:'관리자 페이지',date:'2026-03-20',note:'모듈별 필드 추가/삭제'},
   {id:22,cat:'기타',name:'사용자 메모 공간',status:'done',method:'메인 화면 메모 패널',date:'2026-03-22',note:'개인 메모 작성/저장'},
-  {id:23,cat:'배포',name:'크로스 디바이스 데이터 동기화',status:'done',method:'GitHub Repo data.json',date:'2026-03-23',note:'로그인시 서버 로드, 저장시 자동 업로드 (2초 디바운스)'}
+  {id:23,cat:'배포',name:'크로스 디바이스 데이터 동기화',status:'done',method:'GitHub Repo data.json',date:'2026-03-23',note:'로그인시 서버 로드, 저장시 자동 업로드 (2초 디바운스)'},
+  {id:24,cat:'배포',name:'배포시 데이터 보호',status:'done',method:'_repoDataLoaded 플래그+빈데이터 체크',date:'2026-03-23',note:'로드 전 sync 차단, 빈 데이터로 repo 덮어쓰기 방지'}
 ];
 var featureTracker=(function(){try{var s=localStorage.getItem('pm_featureTracker');if(s){var d=JSON.parse(s);if(d&&d.length)return d}}catch(e){}return JSON.parse(JSON.stringify(defaultFeatureTracker))})();
 function saveFeatureTracker(){try{localStorage.setItem('pm_featureTracker',JSON.stringify(featureTracker))}catch(e){}}
