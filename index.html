@@ -958,6 +958,87 @@ var reportConfig={showTimeline:true,showChecklist:true,showNotifications:true,sh
 var _cloudReady=false,_syncing=false,_syncQueue=[],_eventSource=null;
 var _offlineChanges=[];
 
+// ── GitHub Gist auto-sync ──
+var _gistDebounce=null;
+var _gistSyncing=false;
+function _autoGistSync(){
+  if(_gistDebounce)clearTimeout(_gistDebounce);
+  _gistDebounce=setTimeout(function(){
+    var token=appSettings.syncGistToken;
+    if(!token||appSettings.syncMethod!=='gist')return;
+    if(_gistSyncing)return;
+    _gistSyncing=true;
+    updateSyncStatus('\uD83D\uDD04 \uB3D9\uAE30\uD654 \uC911...');
+    var pkg={
+      exportDate:new Date().toISOString(),
+      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig},
+      meta:{eventCount:events.length,userCount:users.length}
+    };
+    var gistId=appSettings.syncGistId;
+    var body=JSON.stringify({
+      description:'\uC758\uC804\uB9C8\uC2A4\uD130 \uC790\uB3D9\uB3D9\uAE30\uD654 - '+new Date().toLocaleString('ko-KR'),
+      public:false,
+      files:{'protocol_master_data.json':{content:JSON.stringify(pkg)}}
+    });
+    var url=gistId?'https://api.github.com/gists/'+gistId:'https://api.github.com/gists';
+    var method=gistId?'PATCH':'POST';
+    fetch(url,{
+      method:method,
+      headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+      body:body
+    }).then(function(r){
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.json();
+    }).then(function(data){
+      _gistSyncing=false;
+      if(!gistId&&data.id){
+        appSettings.syncGistId=data.id;
+        try{localStorage.setItem('protocolMasterSettings2',JSON.stringify(appSettings))}catch(e){}
+      }
+      appSettings.lastSyncTime=new Date().toISOString();
+      updateSyncStatus('\u2705 \uB3D9\uAE30\uD654 \uC644\uB8CC ('+new Date().toLocaleTimeString('ko-KR')+')');
+    }).catch(function(e){
+      _gistSyncing=false;
+      updateSyncStatus('\u274C \uB3D9\uAE30\uD654 \uC2E4\uD328: '+e.message);
+    });
+  },1500);
+}
+// Load latest data from Gist on startup
+function loadFromGist(){
+  var token=appSettings.syncGistToken;
+  var gistId=appSettings.syncGistId;
+  if(!token||!gistId||appSettings.syncMethod!=='gist')return Promise.resolve(false);
+  updateSyncStatus('\uD83D\uDD04 \uD074\uB77C\uC6B0\uB4DC\uC5D0\uC11C \uB370\uC774\uD130 \uBD88\uB7EC\uC624\uB294 \uC911...');
+  return fetch('https://api.github.com/gists/'+gistId,{
+    headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(data){
+    var file=data.files['protocol_master_data.json']||data.files['protocol_master_backup.json'];
+    if(!file)throw new Error('no data file');
+    var pkg=JSON.parse(file.content);
+    if(!pkg||!pkg.data)throw new Error('invalid data');
+    if(pkg.data.events&&pkg.data.events.length>0)events=pkg.data.events;
+    if(pkg.data.users&&pkg.data.users.length>0)users=pkg.data.users;
+    if(pkg.data.auditLogs)auditLogs=pkg.data.auditLogs;
+    if(pkg.data.reportConfig){
+      Object.keys(pkg.data.reportConfig).forEach(function(k){reportConfig[k]=pkg.data.reportConfig[k]});
+    }
+    try{
+      localStorage.setItem('pm_events',JSON.stringify(events));
+      localStorage.setItem('pm_users',JSON.stringify(users));
+      localStorage.setItem('pm_audit',JSON.stringify(auditLogs));
+    }catch(e){}
+    updateSyncStatus('\u2705 \uD074\uB77C\uC6B0\uB4DC \uB370\uC774\uD130 \uB85C\uB4DC \uC644\uB8CC');
+    return true;
+  }).catch(function(e){
+    console.warn('Gist load failed:',e);
+    updateSyncStatus('\u26A0\uFE0F \uD074\uB77C\uC6B0\uB4DC \uB85C\uB4DC \uC2E4\uD328 (\uB85C\uCEEC \uB370\uC774\uD130 \uC0AC\uC6A9)');
+    return false;
+  });
+}
+
 // Core save function - call after ANY data mutation
 function save(collection){
   // Always save to localStorage as cache
@@ -970,6 +1051,9 @@ function save(collection){
   // Sync to cloud if connected
   if(_cloudReady&&appSettings.firebaseUrl){
     cloudSave(collection||'all');
+  }else if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken){
+    // Auto-sync to Gist
+    _autoGistSync();
   }else{
     // Queue for later sync
     _offlineChanges.push({time:Date.now(),col:collection||'all'});
@@ -1340,20 +1424,35 @@ Q('liBtn').onclick=doLogin;Q('liPw').onkeydown=function(e){if(e.key==='Enter')do
 document.addEventListener('click',function(e){if(!e.target.closest('#avBtn'))Q('dd').classList.remove('show')});
 function doLogin(){
   var id=Q('liId').value.trim(),pw=Q('liPw').value.trim(),er=Q('liErr');
-  if(!id||!pw){er.textContent='\uC544\uC774\uB514\uC640 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.';er.style.display='block';return}
+  if(!id||!pw){er.textContent='아이디와 비밀번호를 입력해주세요.';er.style.display='block';return}
+  er.style.display='none';
+  loadSettings();
+  if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken&&appSettings.syncGistId){
+    Q('liBtn').disabled=true;Q('liBtn').textContent='데이터 동기화 중...';
+    loadFromGist().then(function(){
+      Q('liBtn').disabled=false;Q('liBtn').textContent='로그인';
+      _doLoginAuth(id,pw,er);
+    }).catch(function(){
+      Q('liBtn').disabled=false;Q('liBtn').textContent='로그인';
+      _doLoginAuth(id,pw,er);
+    });
+  }else{
+    _doLoginAuth(id,pw,er);
+  }
+}
+function _doLoginAuth(id,pw,er){
   var u=users.find(function(x){return x.loginId===id});
-  if(!u){er.textContent='\uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uC544\uC774\uB514\uC785\uB2C8\uB2E4.';er.style.display='block';return}
-  if(u.status==='pending'){er.textContent='\uAD00\uB9AC\uC790 \uC2B9\uC778 \uB300\uAE30 \uC911\uC785\uB2C8\uB2E4.';er.style.display='block';return}
-  if(u.status==='disabled'){er.textContent='\uBE44\uD65C\uC131\uD654\uB41C \uACC4\uC815\uC785\uB2C8\uB2E4.';er.style.display='block';return}
-  // Password verification
+  if(!u){er.textContent='존재하지 않는 아이디입니다.';er.style.display='block';return}
+  if(u.status==='pending'){er.textContent='관리자 승인 대기 중입니다.';er.style.display='block';return}
+  if(u.status==='disabled'){er.textContent='비활성화된 계정입니다.';er.style.display='block';return}
   hashPwAsync(pw).then(function(hashed){
     if(!u.pwHash){
       hashPwAsync('1234').then(function(defHash){
-        if(hashed!==defHash){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
+        if(hashed!==defHash){er.textContent='비밀번호가 일치하지 않습니다.';er.style.display='block';return}
         u.pwHash=defHash;save('users');_completeLogin(u);
       });return;
     }
-    if(u.pwHash!==hashed){er.textContent='\uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.';er.style.display='block';return}
+    if(u.pwHash!==hashed){er.textContent='비밀번호가 일치하지 않습니다.';er.style.display='block';return}
     _completeLogin(u);
   });
 }
@@ -1376,6 +1475,10 @@ function _completeLogin(u){
     }).catch(function(){
       loadFromLocal();initCal();
     });
+  }else if(appSettings.syncMethod==='gist'&&appSettings.syncGistToken&&appSettings.syncGistId){
+    var gistUser=users.find(function(x){return x.loginId===me.loginId});
+    if(gistUser)me=gistUser;
+    initCal();
   }else{
     loadFromLocal();initCal();
   }
