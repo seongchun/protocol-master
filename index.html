@@ -970,7 +970,7 @@ function _autoRepoSync(){
     _repoSyncing=true;
     var pkg={
       exportDate:new Date().toISOString(),
-      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig,reqHistory:reqHistory},
+      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig,reqHistory:reqHistory,featureTracker:featureTracker},
       meta:{eventCount:events.length,userCount:users.length}
     };
     var jsonStr=JSON.stringify(pkg);
@@ -1032,6 +1032,10 @@ function loadFromGist(){
     if(pkg.data.reqHistory&&pkg.data.reqHistory.length>0){
       reqHistory=pkg.data.reqHistory;
       reqNextId=Math.max.apply(null,reqHistory.map(function(r){return r.id}))+1;
+    }
+    if(pkg.data.featureTracker&&pkg.data.featureTracker.length>0){
+      featureTracker=pkg.data.featureTracker;
+      try{localStorage.setItem('pm_featureTracker',JSON.stringify(featureTracker))}catch(e){}
     }
     try{
       localStorage.setItem('pm_events',JSON.stringify(events));
@@ -2484,11 +2488,12 @@ var defaultFeatureTracker=[
   {id:15,cat:'사용자',name:'비밀번호 직접 설정',status:'done',method:'관리자 페이지',date:'2026-03-22',note:'편집 모드 외에도 항상 표시'},
   {id:16,cat:'관리',name:'감사 로그',status:'done',method:'직접 구현',date:'2026-03-20',note:'생성/수정/삭제 이력'},
   {id:17,cat:'관리',name:'요청사항 이력관리',status:'done',method:'관리자 페이지 탭',date:'2026-03-22',note:'상태 편집/추가/삭제 가능'},
-  {id:18,cat:'배포',name:'GitHub Pages 배포',status:'progress',method:'RPA 개발중',date:'2026-03-22',note:'seongchun.github.io/protocol-master'},
+  {id:18,cat:'배포',name:'GitHub Pages 배포',status:'done',method:'RPA 자동배포',date:'2026-03-23',note:'seongchun.github.io/protocol-master'},
   {id:19,cat:'기타',name:'PWA 오프라인 지원',status:'done',method:'Service Worker',date:'2026-03-20',note:'manifest.json, sw.js'},
   {id:20,cat:'기타',name:'다중 일자 일정 표시',status:'done',method:'캘린더 UI',date:'2026-03-20',note:'시작~종료일 바 형태'},
   {id:21,cat:'기타',name:'입력항목 커스터마이징',status:'done',method:'관리자 페이지',date:'2026-03-20',note:'모듈별 필드 추가/삭제'},
-  {id:22,cat:'기타',name:'사용자 메모 공간',status:'done',method:'메인 화면 메모 패널',date:'2026-03-22',note:'개인 메모 작성/저장'}
+  {id:22,cat:'기타',name:'사용자 메모 공간',status:'done',method:'메인 화면 메모 패널',date:'2026-03-22',note:'개인 메모 작성/저장'},
+  {id:23,cat:'배포',name:'크로스 디바이스 데이터 동기화',status:'done',method:'GitHub Repo data.json',date:'2026-03-23',note:'로그인시 서버 로드, 저장시 자동 업로드 (2초 디바운스)'}
 ];
 var featureTracker=(function(){try{var s=localStorage.getItem('pm_featureTracker');if(s){var d=JSON.parse(s);if(d&&d.length)return d}}catch(e){}return JSON.parse(JSON.stringify(defaultFeatureTracker))})();
 function saveFeatureTracker(){try{localStorage.setItem('pm_featureTracker',JSON.stringify(featureTracker))}catch(e){}}
