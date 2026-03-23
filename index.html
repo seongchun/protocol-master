@@ -970,7 +970,7 @@ function _autoRepoSync(){
     _repoSyncing=true;
     var pkg={
       exportDate:new Date().toISOString(),
-      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig},
+      data:{events:events,users:users,auditLogs:auditLogs,reportConfig:reportConfig,reqHistory:reqHistory},
       meta:{eventCount:events.length,userCount:users.length}
     };
     var jsonStr=JSON.stringify(pkg);
@@ -1029,10 +1029,15 @@ function loadFromGist(){
     if(pkg.data.reportConfig){
       Object.keys(pkg.data.reportConfig).forEach(function(k){reportConfig[k]=pkg.data.reportConfig[k]});
     }
+    if(pkg.data.reqHistory&&pkg.data.reqHistory.length>0){
+      reqHistory=pkg.data.reqHistory;
+      reqNextId=Math.max.apply(null,reqHistory.map(function(r){return r.id}))+1;
+    }
     try{
       localStorage.setItem('pm_events',JSON.stringify(events));
       localStorage.setItem('pm_users',JSON.stringify(users));
       localStorage.setItem('pm_audit',JSON.stringify(auditLogs));
+      localStorage.setItem('pm_reqHistory',JSON.stringify(reqHistory));
     }catch(e){}
     console.log('Repo data loaded: '+pkg.meta.eventCount+' events, '+pkg.meta.userCount+' users');
     return true;
