@@ -1399,8 +1399,8 @@ function td(){var t=new Date();return fmt(t.getFullYear(),t.getMonth(),t.getDate
 function dim(y,m){return new Date(y,m+1,0).getDate()}
 function fdow(y,m){return new Date(y,m,1).getDay()}
 function inR(ds,s,e){return ds>=s&&ds<=(e||s)}
-function evOn(ds){return events.filter(function(e){return filters[e.module]&&inR(ds,e.startDate,e.endDate)})}
-function evAll(ds){return events.filter(function(e){return inR(ds,e.startDate,e.endDate)})}
+function evOn(ds){return events.filter(function(e){var p=me&&me.perms?me.perms[e.module]:'readwrite';if(me&&me.role==='admin')p='readwrite';return filters[e.module]&&p&&p!=='none'&&inR(ds,e.startDate,e.endDate)})}
+function evAll(ds){return events.filter(function(e){var p=me&&me.perms?me.perms[e.module]:'readwrite';if(me&&me.role==='admin')p='readwrite';return p&&p!=='none'&&inR(ds,e.startDate,e.endDate)})}
 function dlabel(ds){var d=new Date(ds+'T00:00:00');return(d.getMonth()+1)+'\uC6D4 '+d.getDate()+'\uC77C ('+DY[d.getDay()]+')'}
 function now(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
 function mkBadge(mod,big){var m=MOD[mod];return'<span class="badge'+(big?' badge-l':'')+'" style="background:'+m.l+';color:'+m.c+';border:1.5px solid '+m.m+'"><span class="dot" style="background:'+m.c+'"></span>'+m.label+'</span>'}
@@ -1488,6 +1488,7 @@ function doSearch(q){
   q=q.trim().toLowerCase();var r=Q('searchResults');
   if(!q){r.style.display='none';return}
   var results=events.filter(function(e){
+    var p=me&&me.perms?me.perms[e.module]:'readwrite';if(me&&me.role==='admin')p='readwrite';if(!p||p==='none')return false;
     return(e.title&&e.title.toLowerCase().indexOf(q)>=0)||(e.memo&&e.memo.toLowerCase().indexOf(q)>=0)||(e.visitorInfo&&e.visitorInfo.toLowerCase().indexOf(q)>=0)||(e.hallName&&e.hallName.toLowerCase().indexOf(q)>=0);
   });
   if(!results.length){r.innerHTML='<div class="card" style="padding:16px;text-align:center;color:var(--g400)">\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';r.style.display='block';return}
@@ -1622,7 +1623,7 @@ function calNext(){if(curView==='month'){if(calM===11){calM=0;calY++}else calM++
 function calToday(){var d=new Date();calY=d.getFullYear();calM=d.getMonth();selDate=td();renderCal()}
 function renderViewTabs(){var h='';['month','week','day'].forEach(function(v){h+='<button class="view-tab'+(curView===v?' active':'')+'" onclick="switchView(\''+v+'\')">'+(v==='month'?'\uC6D4':v==='week'?'\uC8FC':'\uC77C')+'</button>'});Q('viewTabs').innerHTML=h}
 function switchView(v){curView=v;try{localStorage.setItem('pm_view',v)}catch(e){}if(!selDate)selDate=td();renderViewTabs();renderCal()}
-function renderFilters(){var h='';Object.keys(MOD).forEach(function(k){var m=MOD[k],on=filters[k];h+='<button data-k="'+k+'" class="filter-pill" style="border-color:'+(on?m.c:'var(--g200)')+';background:'+(on?m.l:'transparent')+';color:'+(on?m.c:'var(--g400)')+';opacity:'+(on?1:.45)+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(on?m.c:'var(--g300)')+'"></span>'+m.label+'</button>'});Q('calFilters').innerHTML=h;Q('calFilters').querySelectorAll('button').forEach(function(b){b.onclick=function(){filters[this.dataset.k]=!filters[this.dataset.k];renderFilters();renderCal();renderToday()}})}
+function renderFilters(){var h='';Object.keys(MOD).forEach(function(k){var p=me&&me.perms?me.perms[k]:'readwrite';if(me&&me.role==='admin')p='readwrite';if(!p||p==='none'){filters[k]=false;return}var m=MOD[k],on=filters[k];h+='<button data-k="'+k+'" class="filter-pill" style="border-color:'+(on?m.c:'var(--g200)')+';background:'+(on?m.l:'transparent')+';color:'+(on?m.c:'var(--g400)')+';opacity:'+(on?1:.45)+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(on?m.c:'var(--g300)')+'"></span>'+m.label+'</button>'});Q('calFilters').innerHTML=h;Q('calFilters').querySelectorAll('button').forEach(function(b){b.onclick=function(){filters[this.dataset.k]=!filters[this.dataset.k];renderFilters();renderCal();renderToday()}})}
 function renderCal(){if(calY==null||calM==null){var _d=new Date();calY=_d.getFullYear();calM=_d.getMonth()}if(curView==='month')renderMonth();else if(curView==='week')renderWeek();else renderDay();if(curView==='month')Q('calTitle').textContent=calY+'\uB144 '+(calM+1)+'\uC6D4';else if(curView==='week'){var ws=weekStart(selDate||td());Q('calTitle').textContent=dlabel(ws)+' \uC8FC\uAC04'}else Q('calTitle').textContent=dlabel(selDate||td())}
 
 function renderMonth(){
@@ -2321,12 +2322,12 @@ function doSave(){
 // ═══════════════════════════════════════
 // NEW EVENT
 // ═══════════════════════════════════════
-function renderNew(){newMod='vip_visit';newTimeline=[];newChecklist=[];newNotifications=[];buildNewForm()}
+function renderNew(){var fk=Object.keys(MOD).filter(function(k){var p=me&&me.perms?me.perms[k]:'readwrite';if(me&&me.role==='admin')return true;return p==='readwrite'});newMod=fk.length?fk[0]:'vip_visit';newTimeline=[];newChecklist=[];newNotifications=[];buildNewForm()}
 var newTimeline=[],newChecklist=[],newNotifications=[];
 function buildNewForm(){
   var cw=me.perms[newMod]==='readwrite'||me.role==='admin',mf=MOD[newMod];
   var h='<div class="card au" style="padding:20px;margin-bottom:12px"><label style="font-size:13px;font-weight:800;color:var(--g500);display:block;margin-bottom:10px">모듈 선택</label><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
-  Object.keys(MOD).forEach(function(k){var m=MOD[k];h+='<button data-mk="'+k+'" style="padding:12px;border-radius:var(--r);border:2px solid '+(newMod===k?m.c:'var(--g200)')+';background:'+(newMod===k?m.l:'var(--g0)')+';display:flex;align-items:center;gap:8px;transition:all .15s"><span style="font-size:18px">'+m.icon+'</span><span style="font-weight:700;font-size:13px;color:'+(newMod===k?m.c:'var(--g600)')+'">'+m.label+'</span></button>'});
+  Object.keys(MOD).forEach(function(k){var p=me&&me.perms?me.perms[k]:'readwrite';if(me&&me.role==='admin')p='readwrite';if(p!=='readwrite')return;var m=MOD[k];h+='<button data-mk="'+k+'" style="padding:12px;border-radius:var(--r);border:2px solid '+(newMod===k?m.c:'var(--g200)')+';background:'+(newMod===k?m.l:'var(--g0)')+';display:flex;align-items:center;gap:8px;transition:all .15s"><span style="font-size:18px">'+m.icon+'</span><span style="font-weight:700;font-size:13px;color:'+(newMod===k?m.c:'var(--g600)')+'">'+m.label+'</span></button>'});
   h+='</div>';if(!cw)h+='<p style="color:var(--red);font-size:13px;font-weight:600;margin-top:10px;background:var(--red-l);padding:8px 12px;border-radius:8px">쓰기 권한이 없습니다.</p>';h+='</div>';
   // Basic info
   h+='<div class="card au" style="padding:20px;margin-bottom:12px"><div style="display:flex;flex-direction:column;gap:14px">';
@@ -2581,7 +2582,8 @@ var defaultFeatureTracker=[
   {id:22,cat:'기타',name:'사용자 메모 공간',status:'done',method:'메인 화면 메모 패널',date:'2026-03-22',note:'개인 메모 작성/저장'},
   {id:23,cat:'배포',name:'크로스 디바이스 데이터 동기화',status:'done',method:'GitHub Repo data.json',date:'2026-03-23',note:'로그인시 서버 로드, 저장시 자동 업로드 (2초 디바운스)'},
   {id:24,cat:'배포',name:'데이터 소실 원천 방지',status:'done',method:'3단계 폴백(repo\u2192localStorage\u2192sampleData)+sync가드',date:'2026-03-23',note:'loadFromGist 폴백체인, _autoRepoSync 이중가드, _completeLogin 최종안전장치'},
-  {id:25,cat:'버그수정',name:'사용자 승인/권한 변경 미저장 수정',status:'done',method:'cycSt(),cycPerm()에 save() 호출 추가',date:'2026-03-24',note:'상태/권한 변경 후 save() 누락으로 repo 미동기화 버그 해결'}
+  {id:25,cat:'버그수정',name:'사용자 승인/권한 변경 미저장 수정',status:'done',method:'cycSt(),cycPerm()에 save() 호출 추가',date:'2026-03-24',note:'상태/권한 변경 후 save() 누락으로 repo 미동기화 버그 해결'},
+  {id:26,cat:'버그수정',name:'카테고리별 권한 필터링 적용',status:'done',method:'evOn/evAll/renderFilters/doSearch/buildNewForm에 perms 체크 추가',date:'2026-03-24',note:'none 권한 카테고리 일정 숨김, read 권한은 읽기만, readwrite만 쓰기 가능하도록 전면 적용'}
 ];
 var featureTracker=(function(){try{var s=localStorage.getItem('pm_featureTracker');if(s){var d=JSON.parse(s);if(d&&d.length)return d}}catch(e){}return JSON.parse(JSON.stringify(defaultFeatureTracker))})();
 function saveFeatureTracker(){try{localStorage.setItem('pm_featureTracker',JSON.stringify(featureTracker))}catch(e){}}
